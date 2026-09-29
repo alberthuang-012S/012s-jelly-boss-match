@@ -9,6 +9,7 @@
   box-shadow: 0 5px 18px #454c7510;
 }
 .battlefield--fast { --rush-time: 130ms; }
+.battlefield--charging .battlefield-enemy::after { content: ""; position: absolute; inset: 8%; border: 2px solid #a88ada9c; border-radius: 48%; box-shadow: 0 0 15px #ad91d8a3; animation: boss-charge-pulse .9s ease-in-out infinite alternate; pointer-events: none; }
 .battlefield-hud { position: relative; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 15px 0; }
 .battlefield-title > span { color: #9687bc; font: 900 8px 'Nunito',sans-serif; letter-spacing: .16em; }
 .battlefield-title h1 { margin: 3px 0 0; color: #475470; font-size: 16px; }
@@ -29,23 +30,34 @@
 .battlefield-enemy { position: absolute; left: 67%; top: 21%; width: 31%; height: 65%; z-index: 2; transition: transform .18s ease-out; }
 .battlefield-enemy > svg { position: relative; width: 100%; height: 100%; overflow: visible; }
 .battlefield-enemy-shadow { position: absolute; left: 8%; right: 4%; bottom: 6%; height: 15%; border-radius: 50%; background: #70699f20; filter: blur(3px); }
-.battlefield-hero { position: absolute; left: var(--home-x); top: var(--home-y); width: clamp(39px,10vw,58px); height: clamp(44px,11vw,64px); transform: translateY(-50%); transition: left var(--rush-time) cubic-bezier(.5,0,.2,1),top var(--rush-time) ease-out,transform var(--rush-time) ease-out; }
+.battlefield-hero { position: absolute; left: var(--home-x); top: var(--home-y); width: clamp(39px,10vw,58px); height: clamp(44px,11vw,64px); padding: 0; border: 0; color: inherit; background: transparent; appearance: none; text-align: center; cursor: pointer; transform: translateY(-50%); transition: left var(--rush-time) cubic-bezier(.5,0,.2,1),top var(--rush-time) ease-out,transform var(--rush-time) ease-out; }
+.battlefield-hero:focus-visible { z-index: 11 !important; outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 15px; }
+.battlefield-hero:disabled { cursor: default; }
 .battlefield-hero-art { position: relative; height: 100%; animation: battlefield-idle 2.5s ease-in-out var(--idle-delay) infinite; }
 .battlefield-hero-art > svg { width: 100%; height: 100%; overflow: visible; }
 .battlefield-hero-shadow { position: absolute; left: 17%; right: 17%; bottom: -1px; height: 8px; border-radius: 50%; background: #5b698b26; }
 .battlefield-hero-name { position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); color: #7e8b9e; font: 900 7px 'Nunito',sans-serif; letter-spacing: .06em; }
+.battlefield-charge-ring { position: absolute; left: 50%; bottom: -3px; width: 27px; height: 8px; transform: translateX(-50%); border: 1px solid #b8c3d1; border-radius: 50%; background: conic-gradient(var(--accent) var(--charge-progress),#dbe1e9 0); box-shadow: 0 2px 4px #59678130; }
+.battlefield-charge-ring > i { position: absolute; inset: -3px 0 0; color: #fff; font: 1000 10px/1 'Nunito',sans-serif; text-shadow: 0 1px 4px var(--accent),0 0 7px var(--accent); }
+.battlefield-hero--charged .battlefield-charge-ring { border-color: var(--accent); box-shadow: 0 0 9px var(--accent); animation: charge-ready-pulse .72s ease-in-out infinite alternate; }
 .battlefield-hero--energized .battlefield-hero-art { filter: drop-shadow(0 0 6px var(--accent)); }
 .battlefield-trail { position: absolute; top: 45%; right: 45%; width: 110%; height: 18%; opacity: 0; border-radius: 50%; background: linear-gradient(90deg,transparent,var(--accent)); box-shadow: 0 9px 0 -3px var(--accent),0 -9px 0 -3px var(--accent); }
 .battlefield--charge .battlefield-hero--attacking .battlefield-hero-art { animation: none; transform: rotate(-9deg) scale(.96,1.04); filter: drop-shadow(0 0 7px var(--accent)); }
 .battlefield--rush .battlefield-hero--attacking,
 .battlefield--impact .battlefield-hero--attacking { left: var(--target-x); top: var(--target-y); transform: translateY(-50%) rotate(12deg) scale(1.08); }
 .battlefield--rush .battlefield-hero--attacking .battlefield-trail { opacity: .7; }
+.battlefield--chain-2.battlefield--rush .battlefield-hero--attacking .battlefield-trail { opacity: .92; filter: drop-shadow(0 0 5px #fff); }
 .battlefield--rush .battlefield-hero--attacking .battlefield-hero-art,
 .battlefield--impact .battlefield-hero--attacking .battlefield-hero-art { animation: none; }
 .battlefield--recover .battlefield-hero--attacking { transition-timing-function: cubic-bezier(.2,.7,.3,1); }
 .battlefield--recover .battlefield-hero-art { animation: none; }
 .battlefield--impact .battlefield-enemy { transform: translateX(6px) rotate(4deg); }
+.battlefield--chain-3 .battlefield-impact > b { font-size: 82px; text-shadow: 0 0 18px #ffbd58,0 0 30px #ffe39b; }
+.battlefield--chain-3 .battlefield-damage > strong { color: #b84c72; font-size: 40px; }
+.battlefield--chain-4 .battlefield-hero--attacking .battlefield-hero-art { filter: drop-shadow(0 0 9px var(--accent)); }
+.battlefield--chain-4 .battlefield-impact > i { width: 7px; height: 7px; }
 .battlefield--enemy .battlefield-enemy { transform: translateX(-22%) rotate(-8deg); }
+.battlefield--boss-break .battlefield-enemy { transform: translateX(13%) rotate(12deg) scale(.92); filter: saturate(.7); }
 .battlefield--player-hit .battlefield-hero-art { animation: battlefield-recoil .28s ease-out; }
 .battlefield-impact { position: absolute; left: 75%; top: 42%; z-index: 9; width: 48px; height: 48px; transform: translate(-50%,-50%); pointer-events: none; }
 .battlefield-impact > b { position: absolute; inset: -15px; display: grid; place-items: center; color: #fff7ca; text-shadow: 0 0 15px #ffcc72; font-size: 70px; animation: battlefield-burst .42s ease-out both; }
@@ -59,6 +71,9 @@
 .battlefield-damage > small { font-size: 8px; color: #a47f35; }
 .battlefield-player-hit { position: absolute; z-index: 12; top: 5%; left: 8%; color: #c67885; font-size: 10px; font-weight: 800; }
 .battlefield-caption { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; min-height: 29px; padding: 6px 12px; border-top: 1px solid #e3e8f0; background: #fbfcfed9; font-size: 8px; }
+.battlefield-caption--charging { min-height: 41px; flex-wrap: wrap; gap: 3px 7px; }
+.battlefield-caption--charging .battlefield-next { flex: 1; min-width: 0; }
+.battlefield-charge-warning { flex: 1 0 100%; color: #9271bb; font-weight: 900; text-align: center; }
 .battlefield-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8190a7; }
 .battlefield-next { flex-shrink: 0; color: #a99dbf; font-size: 7px; }
 .battlefield-next b { margin-left: 3px; color: #81719e; font-size: 8px; }
@@ -72,6 +87,8 @@
 @keyframes battlefield-spark { from { opacity: 1; transform: rotate(var(--angle)) translateX(5px); } to { opacity: 0; transform: rotate(var(--angle)) translateX(55px); } }
 @keyframes battlefield-damage { 0% { opacity: 0; transform: translateY(14px) scale(.65); } 35% { opacity: 1; transform: translateY(-2px) scale(1.15); } 100% { opacity: 1; transform: translateY(-7px) scale(1); } }
 @keyframes battlefield-recoil { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px) rotate(-7deg); } 65% { transform: translateX(2px); } }
+@keyframes boss-charge-pulse { from { opacity: .3; transform: scale(.92); } to { opacity: 1; transform: scale(1.08); } }
+@keyframes charge-ready-pulse { from { filter: brightness(1); } to { filter: brightness(1.28); } }
 @media (max-width: 430px) {
   .battlefield { border-radius: 15px; }
   .battlefield-hud { padding: 9px 10px 0; }
@@ -79,6 +96,7 @@
   .battlefield-title > span { font-size: 7px; }
   .battlefield-scene { height: 158px; }
   .battlefield-caption { gap: 5px; padding: 5px 9px; min-height: 27px; }
+  .battlefield-caption--charging { min-height: 40px; gap: 2px 4px; }
   .battlefield-cue { font-size: 8px; }
 }
 @media (max-height: 720px) {

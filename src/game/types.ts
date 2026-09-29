@@ -17,6 +17,14 @@ export type CharacterConfig = {
   symbol: string;
 };
 
+export type CharacterSkillConfig = {
+  id: CharacterId;
+  name: string;
+  chargeCost: number;
+  effectText: string;
+  icon: string;
+};
+
 export type EnemyAction =
   | { type: 'attack'; amount: number }
   | { type: 'blocker'; amount: number }
@@ -27,6 +35,18 @@ export type EnemyAction =
   | { type: 'slime'; amount: number }
   | { type: 'stone'; amount: number };
 
+export type BossSpecialConfig = {
+  title: string;
+  effectText: string;
+  actions: readonly EnemyAction[];
+  /** Number of ordinary enemy actions before the first charge. */
+  initialDelay: number;
+  /** Number of ordinary enemy actions between charged attacks. */
+  cooldown: number;
+};
+
+export type BossChargeState = Pick<BossSpecialConfig, 'title' | 'effectText' | 'actions'>;
+
 export type EnemyConfig = {
   id: string;
   name: string;
@@ -34,6 +54,7 @@ export type EnemyConfig = {
   kind: 'bacteria' | 'cold' | 'sleepy' | 'forgetful' | 'blur' | 'three-high' | 'slime' | 'joint';
   maxHp: number;
   attackPattern: readonly EnemyAction[];
+  bossSpecial?: BossSpecialConfig;
   statMultipliers?: Partial<Record<StatKey, number>>;
   asset: string;
   tagline: string;
@@ -61,6 +82,7 @@ export type Tile = {
 };
 export type Board = (Tile | null)[][];
 export type CharacterStats = Record<CharacterId, Record<StatKey, number>>;
+export type CharacterCharges = Record<CharacterId, number>;
 export type TurnStats = Record<StatKey, number>;
 
 export type GameStatus = 'playing' | 'victory' | 'defeat';
@@ -77,6 +99,13 @@ export type BattleState = {
   turnStats: TurnStats;
   stageStats: TurnStats;
   totalPower: number;
+  chainWaves: number;
+  chainMultiplier: number;
+  reeBoostPending: boolean;
+  characterCharges: CharacterCharges;
+  skillUsedSinceSwap: boolean;
+  bossCharge: BossChargeState | null;
+  bossSpecialCooldown: number;
   totalDamage: number;
   highestTurnDamage: number;
   highestCascade: number;
@@ -91,13 +120,21 @@ export type BattleEvent =
   | { type: 'MATCH_FOUND'; board: Board; cells: Cell[]; cascade: number }
   | { type: 'JELLY_POP'; board: Board; cells: Cell[]; cascade: number }
   | { type: 'STAT_GAIN'; characterId: CharacterId; tileId: string; gains: Gain[]; cascade: number }
+  | { type: 'CHARGE_GAIN'; characterId: CharacterId; tileId: string; charge: number; capacity: number }
   | { type: 'GRAVITY'; board: Board; cascade: number }
   | { type: 'REFILL'; board: Board; cascade: number }
   | { type: 'CASCADE_START'; cascade: number }
-  | { type: 'TURN_TOTAL'; stats: TurnStats; totalPower: number; damage: number }
-  | { type: 'FINAL_ATTACK'; totalPower: number }
+  | { type: 'TURN_TOTAL'; stats: TurnStats; totalPower: number; damage: number; chainWaves: number; chainMultiplier: number; skillMultiplier: number }
+  | { type: 'FINAL_ATTACK'; totalPower: number; chainWaves: number; chainMultiplier: number; skillMultiplier: number }
   | { type: 'ENEMY_DAMAGE'; damage: number; hpDamage: number; shieldDamage: number; enemyHp: number; enemyShield: number }
   | { type: 'ENEMY_ACTION'; action: EnemyAction; message: string }
+  | { type: 'BOSS_CHARGE'; charge: BossChargeState }
+  | { type: 'BOSS_BREAK'; source: 'chain' | 'skill' }
+  | { type: 'BOSS_SPECIAL'; charge: BossChargeState }
+  | { type: 'SKILL_USED'; characterId: CharacterId; skillName: string; chargeAfter: number }
+  | { type: 'PLAYER_HEAL'; amount: number; playerHp: number }
+  | { type: 'ENEMY_SHIELD_DAMAGE'; amount: number; enemyShield: number }
+  | { type: 'REE_BOOST_READY' }
   | { type: 'PLAYER_DAMAGE'; amount: number; playerHp: number }
   | { type: 'BOARD_EFFECT'; board: Board; message: string }
   | { type: 'VICTORY' }

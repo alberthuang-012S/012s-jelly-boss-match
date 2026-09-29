@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { GAME_CONFIG } from './config/gameConfig';
 import { CHARACTERS, characterForColor } from './content/characters';
 import { ENEMIES } from './content/enemies';
+import { CHARACTER_SKILLS } from './content/skills';
 import { STAGES } from './content/stages';
 import { createBattle } from './battle/battleFactory';
-import { resolveDamage } from './battle/damageResolver';
+import { chainMultiplierForWaves, resolveDamage } from './battle/damageResolver';
 import { forceCascadeTurn, forceMatchTurn, resolveTurn } from './battle/turnResolver';
 import { createBoard, hasAnyValidSwap } from './board/createBoard';
 import { applyGravity, refillBoard } from './board/gravity';
@@ -13,9 +14,10 @@ import { areAdjacent, hasMatchAfterSwap, swapTiles } from './board/swap';
 import { DefaultRandom } from './rng/DefaultRandom';
 import { SeededRandom } from './rng/SeededRandom';
 import type { RandomSource } from './rng/RandomSource';
-import { CHARACTER_IDS, JELLY_COLORS, STAT_KEYS, type Board, type JellyColor } from './types';
+import { CHARACTER_IDS, JELLY_COLORS, STAT_KEYS, type BattleEvent, type Board, type JellyColor } from './types';
 import { addGains, aggregateCharacterStats, emptyCharacterStats, sumStats, totalPower } from './stats/statAggregator';
 import { emptyTurnStats, generateTileStats } from './stats/statGenerator';
+import { emptyCharacterCharges, skillUnavailableReason, useCharacterSkill } from './skills/characterSkills';
 
 class ConstantRandom implements RandomSource {
   next() { return 0; }
@@ -48,6 +50,15 @@ function makeBattle(seed = 14) {
   const battle = createBattle(STAGES[0]!, random);
   battle.board = oneSwapMatchBoard();
   battle.enemyHp = 10000;
+  return { battle, random };
+}
+
+function makeBossBattle(seed = 42) {
+  const random = new SeededRandom(seed);
+  const battle = createBattle(STAGES.find((stage) => stage.enemyId === 'blur')!, random);
+  battle.board = oneSwapMatchBoard();
+  battle.enemyHp = 10000;
+  battle.bossSpecialCooldown = 0;
   return { battle, random };
 }
 
@@ -291,6 +302,15 @@ describe('aggregation and damage', () => {
     expect(totalPower(stats)).toBe(127);
   });
 
+  it('applies the configured chain multiplier by wave count and caps at four waves', () => {
+    expect([0, 1, 2, 3, 4, 20].map(chainMultiplierForWaves)).toEqual([1, 1, 1.15, 1.3, 1.5, 1.5]);
+  });
+
+  it('multiplies chain and skill boosts before the single final floor', () => {
+    const stats = { Bra: 0, Sch: 0, Neu: 0, Pai: 0, Tum: 0, Vir: 0, Bac: 0, Eye: 2, Pre: 0 };
+    expect(resolveDamage(stats, ENEMIES.blur!, 1.15, 1.25)).toBe(3);
+  });
+
   it('uses unconfigured enemy multipliers as 1', () => {
     expect(resolveDamage({ Bra: 1, Sch: 2, Neu: 3, Pai: 4, Tum: 5, Vir: 6, Bac: 7, Eye: 8, Pre: 9 }, ENEMIES.bacteria!)).toBe(45);
   });
@@ -311,6 +331,21 @@ describe('seeded RNG and battle turn flow', () => {
       return { battle: result.battle, events: result.events };
     };
     expect(run()).toEqual(run());
+  });
+
+  it('repeats the same result for an identical skill and swap sequence at every presentation speed', () => {
+    const run = (_fast: boolean, _skip: boolean) => {
+      const rng = new SeededRandom('skill-chain-seed');
+      const battle = createBattle(STAGES[0]!, rng);
+      battle.board = oneSwapMatchBoard();
+      battle.enemyHp = 10000;
+      battle.characterCharges.REE = CHARACTER_SKILLS.REE.chargeCost;
+      const skill = useCharacterSkill(battle, 'REE');
+      if (!skill.accepted) throw new Error('REE setup skill should be valid');
+      return resolveTurn(skill.battle, { row: 0, col: 1 }, { row: 1, col: 1 }, rng);
+    };
+    expect(run(false, false)).toEqual(run(true, false));
+    expect(run(false, false)).toEqual(run(false, true));
   });
 
   it('does not give invalid swaps a Player Turn or an enemy action', () => {
@@ -371,3 +406,195 @@ describe('seeded RNG and battle turn flow', () => {
     expect(values.every((value) => value >= 0 && value < 1)).toBe(true);
   });
 });
+
+describe('Boss charge and interrupt flow', () => {
+  it('starts charging during the Boss phase without attacking and waits for one full valid exchange', () => {
+    const { battle, random } = makeBossBattle();
+    const first = resolveTurn(battle, { row: 0, col: 1 }, { row: 1, col: 1 }, random);
+    expect(first.battle.bossCharge?.title).toBe('濃霧震波');
+    expect(first.events.filter((event) => event.type === 'BOSS_CHARGE')).toHaveLength(1);
+    expect(first.events.some((event) => event.type === 'PLAYER_DAMAGE')).toBe(false);
+    expect(first.battle.playerHp).toBe(100);
+
+    first.battle.board = oneSwapMatchBoard();
+    const second = findValidTurn(first.battle, 90);
+    expect(second.battle.bossCharge).toBeNull();
+    expect(second.events.some((event) => event.type === 'BOSS_SPECIAL' || event.type === 'BOSS_BREAK')).toBe(true);
+    expect(second.events.some((event) => event.type === 'ENEMY_ACTION')).toBe(false);
+  });
+
+  it('breaks a charged move with a two-wave chain and skips a normal attack', () => {
+    const { battle, random } = makeBossBattle();
+    battle.bossCharge = { ...battle.enemy.bossSpecial!, actions: [...battle.enemy.bossSpecial!.actions] };
+    const result = forceCascadeTurn(battle, random);
+    expect(result.battle.chainWaves).toBeGreaterThanOrEqual(2);
+    expect(result.events.filter((event) => event.type === 'BOSS_BREAK')).toHaveLength(1);
+    expect(result.events.some((event) => event.type === 'BOSS_SPECIAL' || event.type === 'ENEMY_ACTION')).toBe(false);
+    expect(result.battle.bossCharge).toBeNull();
+  });
+
+  it('resolves an unbroken charged move once instead of appending an ordinary action', () => {
+    const { battle } = makeBossBattle();
+    battle.bossCharge = { ...battle.enemy.bossSpecial!, actions: [...battle.enemy.bossSpecial!.actions] };
+    const result = findValidTurn(battle, 180);
+    expect(result.battle.chainWaves).toBe(1);
+    expect(result.events.filter((event) => event.type === 'BOSS_SPECIAL')).toHaveLength(1);
+    expect(result.events.filter((event) => event.type === 'ENEMY_ACTION')).toHaveLength(0);
+    expect(result.battle.playerHp).toBe(78);
+  });
+
+  it('gives a defeating attack priority over a pending charged move', () => {
+    const { battle, random } = makeBossBattle();
+    battle.bossCharge = { ...battle.enemy.bossSpecial!, actions: [...battle.enemy.bossSpecial!.actions] };
+    battle.enemyHp = 1;
+    const result = forceMatchTurn(battle, 'green', random);
+    expect(result.battle.status).toBe('victory');
+    expect(result.battle.bossCharge).toBeNull();
+    expect(result.events.some((event) => event.type === 'BOSS_SPECIAL' || event.type === 'BOSS_BREAK' || event.type === 'ENEMY_ACTION')).toBe(false);
+  });
+
+  it('does not advance a charge deadline for an invalid swap', () => {
+    const { battle, random } = makeBossBattle();
+    battle.bossCharge = { ...battle.enemy.bossSpecial!, actions: [...battle.enemy.bossSpecial!.actions] };
+    const result = resolveTurn(battle, { row: 4, col: 4 }, { row: 4, col: 5 }, random);
+    expect(result.accepted).toBe(false);
+    expect(result.battle.bossCharge).toEqual(battle.bossCharge);
+    expect(result.battle.bossSpecialCooldown).toBe(battle.bossSpecialCooldown);
+    expect(result.events.some((event) => event.type === 'BOSS_SPECIAL' || event.type === 'BOSS_BREAK')).toBe(false);
+  });
+});
+
+describe('character charge and skill rules', () => {
+  it('starts every new battle with empty charge, an open skill window, and no REE boost', () => {
+    const battle = createBattle(STAGES[0]!, new SeededRandom(120));
+    expect(battle.characterCharges).toEqual(emptyCharacterCharges());
+    expect(battle.skillUsedSinceSwap).toBe(false);
+    expect(battle.reeBoostPending).toBe(false);
+  });
+
+  it('charges once per removed tile instance and stops at each character capacity', () => {
+    const { battle, random } = makeBattle(144);
+    battle.characterCharges.PNN = CHARACTER_SKILLS.PNN.chargeCost - 1;
+    const result = forceMatchTurn(battle, 'green', random);
+    const gains = result.events.filter((event): event is Extract<BattleEvent, { type: 'CHARGE_GAIN' }> => event.type === 'CHARGE_GAIN' && event.characterId === 'PNN');
+    expect(gains).toHaveLength(1);
+    expect(gains[0]?.charge).toBe(CHARACTER_SKILLS.PNN.chargeCost);
+    expect(new Set(gains.map((event) => event.tileId)).size).toBe(gains.length);
+    expect(result.battle.characterCharges.PNN).toBe(CHARACTER_SKILLS.PNN.chargeCost);
+  });
+
+  it('rejects PNN at full HP and heals only up to maximum without advancing a turn', () => {
+    const { battle } = makeBattle();
+    battle.characterCharges.PNN = CHARACTER_SKILLS.PNN.chargeCost;
+    expect(skillUnavailableReason(battle, 'PNN')).toMatch(/HP 已滿/);
+    expect(useCharacterSkill(battle, 'PNN').accepted).toBe(false);
+    battle.playerHp = 94;
+    const used = useCharacterSkill(battle, 'PNN');
+    expect(used.accepted).toBe(true);
+    expect(used.battle.playerHp).toBe(100);
+    expect(used.battle.characterCharges.PNN).toBe(0);
+    expect(used.battle.turns).toBe(battle.turns);
+    expect(used.battle.skillUsedSinceSwap).toBe(true);
+    expect(used.events.find((event) => event.type === 'PLAYER_HEAL')).toMatchObject({ amount: 6, playerHp: 100 });
+    expect(used.events.some((event) => event.type === 'ENEMY_ACTION')).toBe(false);
+  });
+
+  it('allows QCC to cancel a Boss charge and does not append an enemy action', () => {
+    const { battle } = makeBossBattle();
+    battle.bossCharge = { ...battle.enemy.bossSpecial!, actions: [...battle.enemy.bossSpecial!.actions] };
+    battle.bossSpecialCooldown = 2;
+    battle.characterCharges.QCC = CHARACTER_SKILLS.QCC.chargeCost;
+    const used = useCharacterSkill(battle, 'QCC');
+    expect(used.accepted).toBe(true);
+    expect(used.battle.bossCharge).toBeNull();
+    expect(used.battle.characterCharges.QCC).toBe(0);
+    expect(used.events.some((event) => event.type === 'BOSS_BREAK' && event.source === 'skill')).toBe(true);
+    expect(used.events.some((event) => event.type === 'ENEMY_ACTION')).toBe(false);
+
+    const next = findValidTurn(used.battle, 265);
+    expect(next.events.filter((event) => event.type === 'ENEMY_ACTION')).toHaveLength(1);
+    expect(next.events.some((event) => event.type === 'BOSS_CHARGE' || event.type === 'BOSS_SPECIAL')).toBe(false);
+  });
+
+  it('rejects QCC without a pending Boss, and rejects REE stacking', () => {
+    const { battle } = makeBattle();
+    battle.characterCharges.QCC = CHARACTER_SKILLS.QCC.chargeCost;
+    expect(skillUnavailableReason(battle, 'QCC')).toMatch(/沒有正在蓄力/);
+    battle.characterCharges.REE = CHARACTER_SKILLS.REE.chargeCost;
+    battle.reeBoostPending = true;
+    expect(skillUnavailableReason(battle, 'REE')).toMatch(/不能疊加/);
+    expect(useCharacterSkill(battle, 'REE').accepted).toBe(false);
+  });
+
+  it('keeps a REE boost through an invalid exchange, then multiplies damage with chain', () => {
+    const { battle, random } = makeBattle(24);
+    battle.characterCharges.REE = CHARACTER_SKILLS.REE.chargeCost;
+    const ready = useCharacterSkill(battle, 'REE');
+    expect(ready.battle.reeBoostPending).toBe(true);
+    const invalid = resolveTurn(ready.battle, { row: 4, col: 4 }, { row: 4, col: 5 }, random);
+    expect(invalid.accepted).toBe(false);
+    expect(invalid.battle.reeBoostPending).toBe(true);
+    expect(invalid.battle.characterCharges.REE).toBe(0);
+
+    const chained = forceCascadeTurn(ready.battle, new SeededRandom(24));
+    const total = chained.events.find((event) => event.type === 'TURN_TOTAL');
+    expect(chained.battle.chainWaves).toBeGreaterThanOrEqual(2);
+    if (total?.type !== 'TURN_TOTAL') throw new Error('Expected a turn total event');
+    expect(total.skillMultiplier).toBe(1.25);
+    expect(total.damage).toBe(resolveDamage(total.stats, battle.enemy, chainMultiplierForWaves(total.chainWaves), 1.25));
+    expect(chained.battle.reeBoostPending).toBe(false);
+  });
+
+  it('lets KTT remove at most 30 shield without dealing HP damage', () => {
+    const { battle } = makeBattle();
+    battle.characterCharges.KTT = CHARACTER_SKILLS.KTT.chargeCost;
+    battle.enemyShield = 45;
+    const used = useCharacterSkill(battle, 'KTT');
+    expect(used.accepted).toBe(true);
+    expect(used.battle.enemyShield).toBe(15);
+    expect(used.battle.enemyHp).toBe(battle.enemyHp);
+    expect(used.events.find((event) => event.type === 'ENEMY_SHIELD_DAMAGE')).toMatchObject({ amount: 30, enemyShield: 15 });
+    expect(skillUnavailableReason({ ...battle, enemyShield: 0 }, 'KTT')).toMatch(/沒有護盾/);
+  });
+
+  it('lets COO cleanse fog, question marks, and one lock layer without moving or replacing any tile', () => {
+    const { battle } = makeBattle();
+    battle.characterCharges.COO = CHARACTER_SKILLS.COO.chargeCost;
+    battle.board[0]![0]!.fog = 2;
+    battle.board[0]![1]!.confused = 1;
+    battle.board[0]![2]!.lockHits = 1;
+    battle.board[1]![0]!.lockHits = 3;
+    const before = battle.board.map((row) => row.map((tile) => tile && ({ id: tile.id, color: tile.color })));
+    const used = useCharacterSkill(battle, 'COO');
+    expect(used.accepted).toBe(true);
+    expect(used.battle.board.map((row) => row.map((tile) => tile && ({ id: tile.id, color: tile.color })))).toEqual(before);
+    expect(used.battle.board[0]![0]!.fog).toBeUndefined();
+    expect(used.battle.board[0]![1]!.confused).toBeUndefined();
+    expect(used.battle.board[0]![2]!.lockHits).toBeUndefined();
+    expect(used.battle.board[1]![0]!.lockHits).toBe(2);
+    const cleanBoard = used.battle.board.map((row) => row.map((tile) => tile ? { ...tile, lockHits: undefined } : null));
+    expect(skillUnavailableReason({ ...used.battle, board: cleanBoard, skillUsedSinceSwap: false, characterCharges: { ...used.battle.characterCharges, COO: 10 } }, 'COO')).toMatch(/沒有可淨化/);
+  });
+
+  it('allows at most one skill between effective swaps and restores availability after the next accepted turn', () => {
+    const { battle, random } = makeBattle(202);
+    battle.characterCharges.PNN = CHARACTER_SKILLS.PNN.chargeCost;
+    battle.playerHp = 70;
+    const first = useCharacterSkill(battle, 'PNN');
+    expect(skillUnavailableReason(first.battle, 'REE')).toMatch(/只能施放一項技能/);
+    const invalid = resolveTurn(first.battle, { row: 4, col: 4 }, { row: 4, col: 5 }, random);
+    expect(invalid.battle.skillUsedSinceSwap).toBe(true);
+    const valid = findValidTurn(first.battle, 375);
+    expect(valid.battle.skillUsedSinceSwap).toBe(false);
+  });
+});
+
+function findValidTurn(battle: ReturnType<typeof makeBossBattle>['battle'], seedStart: number) {
+  for (let seed = seedStart; seed < seedStart + 300; seed += 1) {
+    const random = new SeededRandom(seed);
+    const candidate = { ...battle, board: oneSwapMatchBoard(), enemyHp: 10000, playerHp: 100 };
+    const result = resolveTurn(candidate, { row: 0, col: 1 }, { row: 1, col: 1 }, random);
+    if (result.accepted && result.battle.chainWaves === 1) return result;
+  }
+  throw new Error('Could not find a seeded single-wave valid turn');
+}

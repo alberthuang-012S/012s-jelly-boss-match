@@ -147,6 +147,7 @@ button:disabled { cursor: not-allowed; }
 
 .stats-panel { flex: 0 0 auto; min-height: 51px; display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid #ecebf4; border-radius: 13px; background: #fff; box-shadow: 0 4px 13px rgba(74,76,113,.035); }
 .stats-panel__head { width: 78px; flex: 0 0 78px; display: grid; grid-template-columns: 1fr auto; align-items: center; color: #858da2; font-size: 8px; font-weight: 800; }.stats-panel__head strong { grid-row: span 2; color: #8074b5; font: 1000 18px 'Nunito'; letter-spacing: -.04em; }.stats-panel__head small { color: #a8a2c2; font: 900 6px 'Nunito'; letter-spacing: .12em; }.stats-grid { flex: 1; display: grid; grid-template-columns: repeat(9,minmax(0,1fr)); gap: 3px; }.stat-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 34px; border: 1px solid #f0f0f5; border-radius: 6px; color: #9da3b4; background: #fafafd; }.stat-chip span { font: 900 7px 'Nunito'; letter-spacing: .04em; }.stat-chip b { margin-top: 1px; color: #586580; font: 900 10px 'Nunito'; font-variant-numeric: tabular-nums; }.pop-number { animation: counter-pop .25s ease-out; }
+.stats-panel__head .chain-multiplier { grid-column: 1 / -1; color: #bd8b36; font: 900 7px 'Nunito'; white-space: nowrap; }
 
 .board-section { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; min-height: 0; }.board-heading { width: 100%; min-height: 27px; display: flex; align-items: center; justify-content: space-between; gap: 5px; }.board-heading > div { display: flex; flex-direction: column; gap: 1px; }.board-heading > div span { color: #9185b8; font: 900 8px 'Nunito'; letter-spacing: .12em; }.board-heading > div b { color: #8490a5; font-size: 8px; font-weight: 600; }.board-tip { color: #9ca3b4; font-size: 8px; }
 .match-board { width: min(100%, 420px, calc(100dvh - 356px)); aspect-ratio: 1; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); grid-template-rows: repeat(6,minmax(0,1fr)); gap: clamp(3px, 1.1vw, 6px); padding: clamp(6px, 1.5vw, 9px); border: 1px solid #303d58; border-radius: 16px; background: linear-gradient(160deg,#3e4e6d,#34435f); box-shadow: 0 10px 21px rgba(39,52,80,.16), inset 0 1px 3px rgba(255,255,255,.12); touch-action: manipulation; }
@@ -246,3 +247,26 @@ button:disabled { cursor: not-allowed; }
 .battle-shell .match-board, .battle-shell .board-footer { width: min(100%,425px,max(240px,calc(100dvh - var(--board-budget)))); }
 @media (max-width: 430px) { .battle-shell { --board-budget: 410px; } }
 @media (min-width: 700px) and (min-height: 801px) { .battle-shell { --board-budget: 520px; } }
+@media (min-width: 700px) and (max-height: 680px) {
+  .battle-shell { height: 100dvh; min-height: 100dvh; margin-top: 0; gap: 4px; padding-top: 4px; padding-bottom: 4px; }
+  .battlefield .battlefield-scene { height: 110px; }
+}
+@media (min-width: 700px) and (min-height: 681px) and (max-height: 1000px) {
+  .battle-shell { --board-budget: 590px; }
+}
+
+.stats-panel__head .ree-boost-ready { grid-column: 1 / -1; color: #dc7351; font: 900 7px 'Nunito'; white-space: nowrap; }
+.battlefield-hero:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
+.battlefield-hero--charged .battlefield-hero-art { filter: drop-shadow(0 0 7px var(--accent)); }
+.skill-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; overflow: auto; padding: max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)); background: rgba(40,48,72,.34); backdrop-filter: blur(5px); }
+.skill-dialog { --accent: #82cf43; position: relative; width: min(355px,100%); max-height: min(90dvh,520px); overflow: auto; padding: 22px 20px 18px; border: 1px solid color-mix(in srgb,var(--accent),white 62%); border-top: 4px solid var(--accent); border-radius: 20px; background: #fff; box-shadow: 0 18px 56px rgba(35,43,70,.25); outline: none; }
+.skill-dialog--purple { --accent: #aa80ef; }.skill-dialog--red { --accent: #fa7167; }.skill-dialog--cyan { --accent: #42b9cb; }.skill-dialog--yellow { --accent: #d9ab22; }
+.skill-dialog:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent),transparent 70%),0 18px 56px rgba(35,43,70,.25); }
+.skill-dialog__close { position: absolute; top: 9px; right: 10px; width: 30px; height: 30px; border: 1px solid #eceef3; border-radius: 10px; color: #778199; background: #fff; font: 700 21px/1 sans-serif; cursor: pointer; }
+.skill-dialog__identity { display: flex; align-items: center; gap: 7px; color: var(--accent); font: 900 9px 'Nunito'; letter-spacing: .08em; }.skill-dialog__identity svg { width: 36px; height: 38px; overflow: visible; }
+.skill-dialog h2 { margin: 6px 35px 3px 0; color: #43516f; font-size: 20px; }.skill-dialog h2 i { padding-left: 4px; color: var(--accent); font-style: normal; }.skill-dialog>p { margin: 5px 0 16px; color: #818ba0; font-size: 11px; line-height: 1.6; }
+.skill-charge-copy { display: flex; justify-content: space-between; color: #838ba0; font-size: 10px; }.skill-charge-copy b { color: #596580; font: 900 10px 'Nunito'; font-variant-numeric: tabular-nums; }.skill-charge-track { height: 8px; overflow: hidden; margin-top: 6px; border-radius: 9px; background: #edf0f4; }.skill-charge-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,color-mix(in srgb,var(--accent),white 25%),var(--accent)); transition: width .2s ease-out; }
+.skill-dialog__status { min-height: 31px; display: flex; align-items: center; margin-top: 9px; color: #638d74; font-size: 9px; font-weight: 800; }.skill-dialog__status--blocked { color: #ba7580; }
+.skill-dialog__actions { display: flex; gap: 8px; margin-top: 3px; }.skill-cast-button,.skill-close-button { min-height: 40px; border-radius: 11px; font-size: 10px; font-weight: 900; cursor: pointer; }.skill-cast-button { flex: 1; border: 1px solid color-mix(in srgb,var(--accent),white 20%); color: #fff; background: var(--accent); box-shadow: 0 5px 13px color-mix(in srgb,var(--accent),transparent 70%); }.skill-cast-button:disabled { border-color: #e6e8ed; color: #aab0be; background: #eceef3; box-shadow: none; cursor: not-allowed; }.skill-close-button { width: 80px; border: 1px solid #e7e9ef; color: #768198; background: #fff; }
+.skill-dialog button:focus-visible { outline: 3px solid color-mix(in srgb,var(--accent),white 32%); outline-offset: 2px; }
+@media (max-width: 430px) { .skill-dialog { padding: 19px 17px 15px; border-radius: 17px; }.skill-overlay { place-items: end center; padding-bottom: max(18px,env(safe-area-inset-bottom)); } }

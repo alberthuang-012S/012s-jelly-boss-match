@@ -9,4 +9,5 @@ export const GAME_CONFIG = {
   maxCascades: 20,
   maxFloatingGroups: 3,
   initialBoardAttempts: 40,
+  chainMultipliers: [1, 1.15, 1.3, 1.5] as const,
 } as const;

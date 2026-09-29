@@ -11,7 +11,9 @@ import { createBattle } from './game/battle/battleFactory';
 import { forceCascadeTurn, forceMatchTurn, resolveTurn } from './game/battle/turnResolver';
 import { addGains, totalPower } from './game/stats/statAggregator';
 import { emptyTurnStats } from './game/stats/statGenerator';
-import { CHARACTER_IDS, STAT_KEYS, type BattleEvent, type BattleState, type CharacterId, type Cell, type JellyColor, type StatKey, type TurnStats } from './game/types';
+import { CHARACTER_IDS, STAT_KEYS, type BattleEvent, type BattleState, type BossChargeState, type CharacterId, type CharacterCharges, type Cell, type JellyColor, type StatKey, type TurnStats } from './game/types';
+import { CHARACTER_SKILLS } from './game/content/skills';
+import { emptyCharacterCharges, skillUnavailableReason, useCharacterSkill } from './game/skills/characterSkills';
 import { loadProgress, loadSettings, saveSettings, saveStageClear, unlockAll } from './storage/progress';
 import type { GameSettings } from './storage/progress';
 
@@ -24,7 +26,7 @@ function makeCue() {
   return (cue: string) => {
     try {
       context ??= new AudioContext();
-      const frequencies: Record<string, number> = { swap: 420, invalid: 190, pop: 620, cascade: 830, tick: 980, attack: 145, hit: 255, player: 220, win: 740, lose: 165 };
+      const frequencies: Record<string, number> = { swap: 420, invalid: 190, pop: 620, cascade: 830, tick: 980, attack: 145, hit: 255, player: 220, win: 740, lose: 165, charge: 365, break: 740, skill: 660, heal: 520 };
       const oscillator = context.createOscillator();
       const volume = context.createGain();
       oscillator.type = cue === 'hit' || cue === 'player' ? 'triangle' : 'sine';
@@ -58,9 +60,9 @@ function HealthBar({ value, max, tint = 'pink' }: { value: number; max: number; 
   return <div className={`health-track health-track--${tint}`} role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={tint === 'mint' ? '玩家 HP' : '敵人 HP'}><span style={{ width: `${percent}%` }} /></div>;
 }
 
-function StatsPanel({ stats, power, animate = false }: { stats: TurnStats; power: number; animate?: boolean }) {
+function StatsPanel({ stats, power, chainMultiplier, reeBoostPending = false, animate = false }: { stats: TurnStats; power: number; chainMultiplier: number; reeBoostPending?: boolean; animate?: boolean }) {
   return <section className="stats-panel" aria-label="本回合九項屬性">
-    <div className="stats-panel__head"><span>本回合能量</span><strong className={animate ? 'power-number pop-number' : 'power-number'}>{power}</strong><small>TOTAL POWER</small></div>
+    <div className="stats-panel__head"><span>本回合能量</span><strong className={animate ? 'power-number pop-number' : 'power-number'}>{power}</strong><small>TOTAL POWER</small><em className="chain-multiplier">連鎖 ×{chainMultiplier.toFixed(2)}</em>{reeBoostPending && <em className="ree-boost-ready">REE 增幅 ×1.25 待命</em>}</div>
     <div className="stats-grid">
       {STAT_KEYS.map((key) => <div className="stat-chip" key={key}><span>{statLabel(key)}</span><b className={animate && stats[key] > 0 ? 'pop-number' : ''}>{String(stats[key]).padStart(2, '0')}</b></div>)}
     </div>
@@ -79,8 +81,13 @@ export default function App() {
   const [displayBoard, setDisplayBoard] = useState<BattleState['board']>([]);
   const [displayStats, setDisplayStats] = useState<TurnStats>(emptyTurnStats);
   const [displayPower, setDisplayPower] = useState(0);
+  const [displayChainMultiplier, setDisplayChainMultiplier] = useState(1);
+  const [displayCharges, setDisplayCharges] = useState<CharacterCharges>(() => emptyCharacterCharges());
+  const [displayReeBoostPending, setDisplayReeBoostPending] = useState(false);
+  const [selectedSkillCharacter, setSelectedSkillCharacter] = useState<CharacterId | null>(null);
   const [enemyHp, setEnemyHp] = useState(0);
   const [enemyShield, setEnemyShield] = useState(0);
+  const [displayBossCharge, setDisplayBossCharge] = useState<BossChargeState | null>(null);
   const [playerHp, setPlayerHp] = useState(100);
   const [selected, setSelected] = useState<Cell | null>(null);
   const [matches, setMatches] = useState<Set<string>>(new Set());
@@ -103,6 +110,8 @@ export default function App() {
   const busyRef = useRef(false);
   const runRef = useRef(0);
   const boardRef = useRef<HTMLDivElement>(null);
+  const skillDialogRef = useRef<HTMLElement>(null);
+  const skillFocusReturnRef = useRef<HTMLElement | null>(null);
   const positionsRef = useRef(new Map<string, { x: number; y: number }>());
   const gestureRef = useRef<{ id: number; x: number; y: number; cell: Cell } | null>(null);
   const suppressClickRef = useRef(false);
@@ -167,6 +176,18 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
 
+  useEffect(() => {
+    if (selectedSkillCharacter) skillDialogRef.current?.focus();
+    else if (!busy && skillFocusReturnRef.current?.isConnected) {
+      skillFocusReturnRef.current.focus();
+      skillFocusReturnRef.current = null;
+    }
+  }, [selectedSkillCharacter, busy]);
+
+  useEffect(() => {
+    if (paused || hiddenPause || screen !== 'battle' || battle?.status !== 'playing') setSelectedSkillCharacter(null);
+  }, [paused, hiddenPause, screen, battle?.status]);
+
   useEffect(() => () => {
     for (const timer of pulseTimers.current) clearTimeout(timer);
   }, []);
@@ -206,8 +227,13 @@ export default function App() {
     setDisplayBoard(boardCopy(nextBattle.board));
     setDisplayStats(emptyTurnStats());
     setDisplayPower(0);
+    setDisplayChainMultiplier(1);
+    setDisplayCharges(nextBattle.characterCharges);
+    setDisplayReeBoostPending(false);
+    setSelectedSkillCharacter(null);
     setEnemyHp(nextBattle.enemyHp);
     setEnemyShield(0);
+    setDisplayBossCharge(null);
     setPlayerHp(nextBattle.playerHp);
     setSelected(null);
     setMatches(new Set());
@@ -233,6 +259,8 @@ export default function App() {
     if (accepted) {
       setDisplayStats(emptyTurnStats());
       setDisplayPower(0);
+      setDisplayChainMultiplier(1);
+      if (result.reeBoostPending) setDisplayReeBoostPending(false);
       setActiveCharacter(null);
     }
     try {
@@ -261,6 +289,9 @@ export default function App() {
             play('tick');
             await wait(fastRef.current ? 12 : 30); break;
           }
+          case 'CHARGE_GAIN':
+            setDisplayCharges((current) => ({ ...current, [event.characterId]: event.charge }));
+            break;
           case 'GRAVITY':
             setDisplayBoard(event.board); await wait(fastRef.current ? 90 : 200); break;
           case 'REFILL':
@@ -268,12 +299,13 @@ export default function App() {
           case 'CASCADE_START':
             setDamageToast(`連鎖 × ${event.cascade - 1}`); play('cascade'); await wait(fastRef.current ? 22 : 85); break;
           case 'TURN_TOTAL':
-            setDisplayStats(event.stats); setDisplayPower(event.totalPower); setDamageToast(`TOTAL POWER  ${event.totalPower}`);
+            setDisplayStats(event.stats); setDisplayPower(event.totalPower); setDisplayChainMultiplier(event.chainMultiplier); setDamageToast(`TOTAL POWER  ${event.totalPower}  ·  CHAIN ×${event.chainMultiplier.toFixed(2)}`);
+            if (event.skillMultiplier > 1) setDisplayReeBoostPending(false);
             await wait(fastRef.current ? 90 : 250); break;
           case 'FINAL_ATTACK':
             attackFastRef.current = fastRef.current;
-            setStrike({ phase: 'charge', fast: attackFastRef.current, attackers: CHARACTER_IDS.filter((id) => totalPower(result.characterTurnStats[id]) > 0), hit: null });
-            setActiveCharacter(null); setLastAction('小隊出擊！'); setDamageToast('');
+            setStrike({ phase: 'charge', fast: attackFastRef.current, attackers: event.chainWaves >= 4 ? [...CHARACTER_IDS] : CHARACTER_IDS.filter((id) => totalPower(result.characterTurnStats[id]) > 0), hit: null, chainWaves: event.chainWaves });
+            setActiveCharacter(null); setLastAction(event.chainWaves >= 4 ? '全隊合擊！' : `連鎖 ×${event.chainMultiplier.toFixed(2)} · 小隊出擊！`); setDamageToast('');
             await wait(attackFastRef.current ? 50 : 120);
             if (run !== runRef.current) return;
             setStrike((current) => ({ ...current, phase: 'rush' })); play('attack');
@@ -293,6 +325,28 @@ export default function App() {
             setLastAction(event.message);
             if (event.action.type === 'attack') setStrike({ ...idleStrike, phase: 'enemy', fast: fastRef.current });
             await wait(fastRef.current ? 90 : 210); break;
+          case 'BOSS_CHARGE':
+            setDisplayBossCharge(event.charge); setLastAction(`${event.charge.title}蓄力中`); setDamageToast('注意蓄力！連鎖 2 波可打斷'); play('charge');
+            await wait(fastRef.current ? 60 : 140); break;
+          case 'BOSS_BREAK':
+            setDisplayBossCharge(null); setStrike({ ...idleStrike, phase: 'boss-break', fast: fastRef.current }); setLastAction('BREAK！強招已打斷'); setDamageToast('BREAK!'); play('break');
+            await wait(fastRef.current ? 90 : 240); setStrike(idleStrike); break;
+          case 'BOSS_SPECIAL':
+            setDisplayBossCharge(null); setLastAction(`強招發動：${event.charge.title}`); setDamageToast(event.charge.title); play('attack');
+            if (event.charge.actions.some((action) => action.type === 'attack')) setStrike({ ...idleStrike, phase: 'enemy', fast: fastRef.current });
+            await wait(fastRef.current ? 55 : 150); break;
+          case 'SKILL_USED':
+            setDisplayCharges((current) => ({ ...current, [event.characterId]: event.chargeAfter })); setLastAction(`${event.characterId} 發動 ${event.skillName}`); play('skill');
+            await wait(fastRef.current ? 45 : 110); break;
+          case 'PLAYER_HEAL':
+            setPlayerHp(event.playerHp); setLastAction(`活力補給 · HP +${event.amount}`); setDamageToast(`HP +${event.amount}`); play('heal');
+            await wait(fastRef.current ? 65 : 160); break;
+          case 'ENEMY_SHIELD_DAMAGE':
+            setEnemyShield(event.enemyShield); setLastAction(`水波破盾 · 護盾 −${event.amount}`); setDamageToast(`SHIELD −${event.amount}`); play('break');
+            await wait(fastRef.current ? 65 : 160); break;
+          case 'REE_BOOST_READY':
+            setDisplayReeBoostPending(true); setLastAction('烈焰增幅待命 · 下次有效交換傷害 ×1.25'); setDamageToast('DAMAGE BOOST ×1.25');
+            await wait(fastRef.current ? 45 : 110); break;
           case 'PLAYER_DAMAGE':
             setPlayerHp(event.playerHp); setPlayerHurt(true); setLastAction(`小隊受到 ${event.amount} 點攻擊`); play('player');
             setStrike(idleStrike);
@@ -311,8 +365,12 @@ export default function App() {
       setEnemyHp(result.enemyHp);
       setEnemyShield(result.enemyShield);
       setPlayerHp(result.playerHp);
+      setDisplayBossCharge(result.bossCharge);
       setDisplayStats(result.turnStats);
       setDisplayPower(result.totalPower);
+      setDisplayChainMultiplier(result.chainMultiplier);
+      setDisplayCharges(result.characterCharges);
+      setDisplayReeBoostPending(result.reeBoostPending);
       if (result.status === 'victory') {
         const saved = saveStageClear(displayedStageIndexRef.current);
         setProgress(saved);
@@ -337,6 +395,7 @@ export default function App() {
     gestureRef.current = null;
     setBusy(false); setPaused(false); setHiddenPause(false); setPopping(false);
     setSelected(null); setMatches(new Set()); setInvalidCells(new Set());
+    setSelectedSkillCharacter(null);
     setStrike(idleStrike); setPlayerHurt(false); setDamageToast('');
   };
 
@@ -373,6 +432,47 @@ export default function App() {
   };
 
   const updateSettings = (change: Partial<GameSettings>) => setSettings((value) => ({ ...value, ...change }));
+
+  const openSkillPanel = (characterId: CharacterId) => {
+    if (!battle || busyRef.current || paused || hiddenPause || battle.status !== 'playing') return;
+    skillFocusReturnRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedSkillCharacter(characterId);
+  };
+
+  const closeSkillPanel = () => setSelectedSkillCharacter(null);
+
+  const castSelectedSkill = () => {
+    if (!battle || !selectedSkillCharacter || busyRef.current || paused || hiddenPause || battle.status !== 'playing') return;
+    const reason = skillUnavailableReason(battle, selectedSkillCharacter);
+    if (reason) return;
+    const result = useCharacterSkill(battle, selectedSkillCharacter);
+    if (!result.accepted) return;
+    pushLog(`SKILL ${selectedSkillCharacter} ${CHARACTER_SKILLS[selectedSkillCharacter].name}`);
+    setSelectedSkillCharacter(null);
+    void animateResolution(result.events, result.battle, false);
+  };
+
+  const handleSkillDialogKey = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSkillPanel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled)'));
+    if (!focusable.length) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  };
+
+  const activeSkill = selectedSkillCharacter ? CHARACTER_SKILLS[selectedSkillCharacter] : null;
+  const skillBlockReason = selectedSkillCharacter && battle ? skillUnavailableReason(battle, selectedSkillCharacter) : null;
+  const skillCanBeCast = Boolean(selectedSkillCharacter && battle && !skillBlockReason && !busy && !paused && !hiddenPause && battle.status === 'playing');
 
   const debugResolution = (color: JellyColor) => {
     if (!battle || busyRef.current || !rngRef.current) return;
@@ -461,11 +561,24 @@ export default function App() {
       <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>{battle.stage.title}</span></div><div className="battle-utilities"><button className={settings.fast ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ fast: !settings.fast })} aria-pressed={settings.fast} aria-label={settings.fast ? '關閉快速模式' : '開啟快速模式'}>FAST</button><button className={settings.sound ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ sound: !settings.sound })} aria-label={settings.sound ? '關閉音效' : '開啟音效'}>♫</button><button className="tool-button" onClick={() => { setPaused(true); }} aria-label="暫停">Ⅱ</button></div></header>
 
       <Battlefield enemy={battle.enemy} hp={enemyHp} shield={enemyShield}
-        nextAction={actionText(battle)} turn={battle.turns} status={lastAction} cue={damageToast}
-        activeCharacter={activeCharacter} strike={strike} playerHurt={playerHurt}
+        nextAction={actionText(battle)} bossCharge={displayBossCharge} turn={battle.turns} status={lastAction} cue={damageToast}
+        activeCharacter={activeCharacter} charges={displayCharges} skillsDisabled={busy || paused || hiddenPause || battle.status !== 'playing'} onSkillSelect={openSkillPanel} strike={strike} playerHurt={playerHurt}
         paused={paused || hiddenPause} skipping={skipAnimation} />
 
-      <StatsPanel stats={displayStats} power={displayPower} animate={Boolean(busy)} />
+      <StatsPanel stats={displayStats} power={displayPower} chainMultiplier={displayChainMultiplier} reeBoostPending={displayReeBoostPending} animate={Boolean(busy)} />
+
+      {selectedSkillCharacter && battle && activeSkill && <div className="skill-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) closeSkillPanel(); }}>
+        <section ref={skillDialogRef} className={`skill-dialog skill-dialog--${CHARACTERS[selectedSkillCharacter].color}`} role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" tabIndex={-1} onKeyDown={handleSkillDialogKey}>
+          <button className="skill-dialog__close" onClick={closeSkillPanel} aria-label="關閉技能說明">×</button>
+          <div className="skill-dialog__identity"><CharacterArt id={selectedSkillCharacter}/><span>{selectedSkillCharacter} · 技能</span></div>
+          <h2 id="skill-dialog-title">{activeSkill.name} <i aria-hidden="true">{activeSkill.icon}</i></h2>
+          <p>{activeSkill.effectText}</p>
+          <div className="skill-charge-copy"><span>技能充能</span><b>{displayCharges[selectedSkillCharacter]} / {activeSkill.chargeCost}</b></div>
+          <div className="skill-charge-track" role="progressbar" aria-label={`${selectedSkillCharacter} 技能充能`} aria-valuemin={0} aria-valuemax={activeSkill.chargeCost} aria-valuenow={Math.min(activeSkill.chargeCost, displayCharges[selectedSkillCharacter])}><span style={{ width: `${Math.min(100, displayCharges[selectedSkillCharacter] / activeSkill.chargeCost * 100)}%` }}/></div>
+          <div className={`skill-dialog__status${skillBlockReason ? ' skill-dialog__status--blocked' : ''}`} role="status">{skillBlockReason ? `目前無法施放：${skillBlockReason}` : '可以施放 · 不消耗交換回合'}</div>
+          <div className="skill-dialog__actions"><button className="skill-cast-button" onClick={castSelectedSkill} disabled={!skillCanBeCast}>施放技能 <span>✦</span></button><button className="skill-close-button" onClick={closeSkillPanel}>關閉</button></div>
+        </section>
+      </div>}
 
       <section className={`board-section${battle.darkTurns > 0 ? ' board-section--dim' : ''}${busy ? ' board-section--busy' : ''}`} aria-label="6 乘 6 水母盤面">
         <div className="board-heading"><div><span>JELLY FIELD</span><b>交換相鄰水母，連成 3 個以上</b></div><span className="board-tip">{busy ? '夥伴能量集結中…' : selected ? '再選一顆相鄰水母' : '滑動交換・也可點選兩格'}</span></div>

@@ -3,6 +3,7 @@ import { ENEMIES } from '../content/enemies';
 import { createBoard } from '../board/createBoard';
 import { emptyTurnStats } from '../stats/statGenerator';
 import { emptyCharacterStats } from '../stats/statAggregator';
+import { emptyCharacterCharges } from '../skills/characterSkills';
 import type { BattleState, StageConfig } from '../types';
 import type { RandomSource } from '../rng/RandomSource';
 
@@ -23,6 +24,13 @@ export function createBattle(stage: StageConfig, random: RandomSource): BattleSt
     turnStats: emptyTurnStats(),
     stageStats: emptyTurnStats(),
     totalPower: 0,
+    chainWaves: 0,
+    chainMultiplier: 1,
+    reeBoostPending: false,
+    characterCharges: emptyCharacterCharges(),
+    skillUsedSinceSwap: false,
+    bossCharge: null,
+    bossSpecialCooldown: enemy.bossSpecial?.initialDelay ?? 0,
     totalDamage: 0,
     highestTurnDamage: 0,
     highestCascade: 0,

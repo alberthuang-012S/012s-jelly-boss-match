@@ -1,7 +1,9 @@
 import { GAME_CONFIG } from '../config/gameConfig';
 import { JELLY_COLORS } from '../types';
 import type { BattleEvent, BattleState, Board, Cell, EnemyAction, JellyColor, Tile, TurnResolution } from '../types';
+import type { BossChargeState } from '../types';
 import { characterForColor } from '../content/characters';
+import { CHARACTER_SKILLS } from '../content/skills';
 import { applyGravity, refillBoard } from '../board/gravity';
 import { createBoard } from '../board/createBoard';
 import { findMatches } from '../board/matchFinder';
@@ -11,7 +13,7 @@ import { pick, sampleWithoutReplacement } from '../rng/RandomSource';
 import { addGains, aggregateCharacterStats, emptyCharacterStats, sumStats, totalPower } from '../stats/statAggregator';
 import { emptyTurnStats } from '../stats/statGenerator';
 import { generateTileStats } from '../stats/statGenerator';
-import { resolveDamage } from './damageResolver';
+import { chainMultiplierForWaves, resolveDamage } from './damageResolver';
 
 const cloneBoard = (board: Board): Board => board.map((row) => row.map((tile) => tile ? { ...tile } : null));
 const eventBoard = (board: Board): Board => cloneBoard(board);
@@ -31,6 +33,51 @@ function actionMessage(action: EnemyAction): string {
     case 'slime': return `黏液格 +${action.amount}`;
     case 'stone': return `石化格 +${action.amount}`;
   }
+}
+
+function resolveActionEffects(action: EnemyAction, board: Board, playerHp: number, enemyShield: number, darkTurns: number, random: RandomSource) {
+  const events: BattleEvent[] = [];
+  let nextPlayerHp = playerHp;
+  let nextEnemyShield = enemyShield;
+  let nextDarkTurns = darkTurns;
+  switch (action.type) {
+    case 'attack':
+      nextPlayerHp = Math.max(0, playerHp - action.amount);
+      events.push({ type: 'PLAYER_DAMAGE', amount: action.amount, playerHp: nextPlayerHp });
+      break;
+    case 'blocker':
+    case 'slime':
+    case 'stone':
+    case 'fog':
+    case 'confuse': {
+      const eligible: Cell[] = [];
+      for (let row = 0; row < board.length; row += 1) {
+        for (let col = 0; col < (board[row]?.length ?? 0); col += 1) {
+          if (!board[row]?.[col]?.lockHits) eligible.push({ row, col });
+        }
+      }
+      const count = Math.min(action.amount, eligible.length);
+      for (const cell of sampleWithoutReplacement(random, eligible, count)) {
+        const tile = board[cell.row]?.[cell.col];
+        if (!tile) continue;
+        if (action.type === 'blocker' || action.type === 'slime') tile.lockHits = 1;
+        else if (action.type === 'stone') tile.lockHits = 2;
+        else if (action.type === 'fog') tile.fog = 2;
+        else tile.confused = 2;
+      }
+      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
+      break;
+    }
+    case 'shield':
+      nextEnemyShield += action.amount;
+      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: `護盾 +${action.amount}` });
+      break;
+    case 'darken':
+      nextDarkTurns = Math.max(nextDarkTurns, action.turns);
+      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
+      break;
+  }
+  return { playerHp: nextPlayerHp, enemyShield: nextEnemyShield, darkTurns: nextDarkTurns, events };
 }
 
 function cellsAround(cells: readonly Cell[], rows: number, cols: number): Cell[] {
@@ -60,6 +107,7 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
   let board = cloneBoard(initialBoard);
   let nextTileId = battle.nextTileId;
   const characterTurnStats = emptyCharacterStats();
+  const characterCharges = { ...battle.characterCharges };
   let turnStats = emptyTurnStats();
   let cascade = 0;
   const eventsPerTile: BattleEvent[] = [];
@@ -91,6 +139,11 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
       characterTurnStats[character.id] = addGains(characterTurnStats[character.id], gains);
       turnStats = addGains(turnStats, gains);
       eventsPerTile.push({ type: 'STAT_GAIN', characterId: character.id, tileId: resolvedTile.id, gains, cascade });
+      const capacity = CHARACTER_SKILLS[character.id].chargeCost;
+      if (characterCharges[character.id] < capacity) {
+        characterCharges[character.id] += 1;
+        eventsPerTile.push({ type: 'CHARGE_GAIN', characterId: character.id, tileId: resolvedTile.id, charge: characterCharges[character.id], capacity });
+      }
     }
     events.push(...eventsPerTile.splice(0));
 
@@ -113,24 +166,29 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
   // Both turn values are reset each valid swap; stageStats keeps the whole-stage aggregate.
   turnStats = aggregateCharacterStats(characterTurnStats);
   const turnPower = totalPower(turnStats);
-  const damage = resolveDamage(turnStats, battle.enemy);
+  const turnChainMultiplier = chainMultiplierForWaves(cascade);
+  const skillMultiplier = battle.reeBoostPending ? 1.25 : 1;
+  const damage = resolveDamage(turnStats, battle.enemy, turnChainMultiplier, skillMultiplier);
   const enemyShieldDamage = Math.min(battle.enemyShield, damage);
   const enemyHpDamage = Math.min(battle.enemyHp, damage - enemyShieldDamage);
   const enemyShield = battle.enemyShield - enemyShieldDamage;
   const enemyHp = Math.max(0, battle.enemyHp - enemyHpDamage);
   const nextTurn = battle.turns + 1;
 
-  events.push({ type: 'TURN_TOTAL', stats: { ...turnStats }, totalPower: turnPower, damage });
-  events.push({ type: 'FINAL_ATTACK', totalPower: turnPower });
+  events.push({ type: 'TURN_TOTAL', stats: { ...turnStats }, totalPower: turnPower, damage, chainWaves: cascade, chainMultiplier: turnChainMultiplier, skillMultiplier });
+  events.push({ type: 'FINAL_ATTACK', totalPower: turnPower, chainWaves: cascade, chainMultiplier: turnChainMultiplier, skillMultiplier });
   events.push({ type: 'ENEMY_DAMAGE', damage, hpDamage: enemyHpDamage, shieldDamage: enemyShieldDamage, enemyHp, enemyShield });
 
   let playerHp = battle.playerHp;
   let darkTurns = Math.max(0, battle.darkTurns - 1);
   let status: BattleState['status'] = battle.status;
   let enemyShieldAfterAction = enemyShield;
+  let bossCharge: BossChargeState | null = battle.bossCharge;
+  let bossSpecialCooldown = battle.bossSpecialCooldown;
 
   if (enemyHp === 0) {
     status = 'victory';
+    bossCharge = null;
     events.push({ type: 'VICTORY' });
   } else {
     let conditionsChanged = false;
@@ -143,46 +201,36 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
     }
     if (conditionsChanged) events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: '干擾效果減弱' });
 
-    const pattern = battle.enemy.attackPattern;
-    const action = pattern[(battle.turns) % pattern.length]!;
-    events.push({ type: 'ENEMY_ACTION', action, message: actionMessage(action) });
-    const eligible: Cell[] = [];
-    for (let row = 0; row < board.length; row += 1) {
-      for (let col = 0; col < (board[row]?.length ?? 0); col += 1) {
-        if (!board[row]?.[col]?.lockHits) eligible.push({ row, col });
-      }
-    }
-    switch (action.type) {
-      case 'attack':
-        playerHp = Math.max(0, playerHp - action.amount);
-        events.push({ type: 'PLAYER_DAMAGE', amount: action.amount, playerHp });
-        break;
-      case 'blocker':
-      case 'slime':
-      case 'stone':
-      case 'fog':
-      case 'confuse': {
-        const count = Math.min(action.amount, eligible.length);
-        for (const cell of sampleWithoutReplacement(random, eligible, count)) {
-          const tile = board[cell.row]?.[cell.col];
-          if (!tile) continue;
-          if (action.type === 'blocker') tile.lockHits = 1;
-          else if (action.type === 'slime') tile.lockHits = 1;
-          else if (action.type === 'stone') tile.lockHits = 2;
-          else if (action.type === 'fog') tile.fog = 2;
-          else tile.confused = 2;
+    if (bossCharge) {
+      if (cascade >= 2) {
+        events.push({ type: 'BOSS_BREAK', source: 'chain' });
+        bossCharge = null;
+      } else {
+        events.push({ type: 'BOSS_SPECIAL', charge: bossCharge });
+        for (const action of bossCharge.actions) {
+          const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, darkTurns, random);
+          playerHp = result.playerHp;
+          enemyShieldAfterAction = result.enemyShield;
+          darkTurns = result.darkTurns;
+          events.push(...result.events);
         }
-        events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
-        break;
+        bossCharge = null;
       }
-      case 'shield':
-        enemyShieldAfterAction += action.amount;
-        events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: `護盾 +${action.amount}` });
-        break;
-      case 'darken':
-        darkTurns = Math.max(darkTurns, action.turns);
-        events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
-        break;
+    } else if (battle.enemy.bossSpecial && bossSpecialCooldown <= 0) {
+      const special = battle.enemy.bossSpecial;
+      bossCharge = { title: special.title, effectText: special.effectText, actions: [...special.actions] };
+      bossSpecialCooldown = special.cooldown;
+      events.push({ type: 'BOSS_CHARGE', charge: bossCharge });
+    } else {
+      const pattern = battle.enemy.attackPattern;
+      const action = pattern[(battle.turns) % pattern.length]!;
+      events.push({ type: 'ENEMY_ACTION', action, message: actionMessage(action) });
+      const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, darkTurns, random);
+      playerHp = result.playerHp;
+      enemyShieldAfterAction = result.enemyShield;
+      darkTurns = result.darkTurns;
+      events.push(...result.events);
+      if (battle.enemy.bossSpecial) bossSpecialCooldown = Math.max(0, bossSpecialCooldown - 1);
     }
     if (playerHp === 0) {
       status = 'defeat';
@@ -203,6 +251,13 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
     turnStats,
     stageStats,
     totalPower: turnPower,
+    characterCharges,
+    skillUsedSinceSwap: false,
+    chainWaves: cascade,
+    chainMultiplier: turnChainMultiplier,
+    reeBoostPending: false,
+    bossCharge,
+    bossSpecialCooldown,
     totalDamage: battle.totalDamage + enemyHpDamage,
     highestTurnDamage: Math.max(battle.highestTurnDamage, enemyHpDamage),
     highestCascade: Math.max(battle.highestCascade, cascade),
