@@ -207,3 +207,36 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Keep the cells anchored while each jelly travels between them. */
+.match-board { position: relative; touch-action: none; user-select: none; }
+.tile-motion { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; }
+.board-cell:focus-visible { outline: 3px solid #fff4c3; outline-offset: 2px; z-index: 4; }
+.board-cell:hover:not(:disabled) { transform: none; }
+.board-cell--selected, .board-cell--selected:hover:not(:disabled) { transform: none; }
+.board-cell--selected .jelly-art { animation: jelly-ready .7s ease-in-out infinite alternate; }
+.match-board--popping .board-cell--match { animation: none; }
+.match-board--popping .board-cell--match .jelly-art { animation: jelly-pop .18s ease-in forwards; }
+.match-board--fast.match-board--popping .board-cell--match .jelly-art { animation-duration: .09s; }
+.board-cell--match::before { content: ''; position: absolute; inset: 8%; border: 2px solid #fff1b9; border-radius: 50%; pointer-events: none; }
+.match-board--popping .board-cell--match::before { animation: jelly-ring .18s ease-out forwards; }
+.tool-button, .battle-exit { min-height: 36px; }
+.tool-button:active, .primary-button:active { transform: scale(.96); }
+.battle-shell:has(.pause-overlay) *, .battle-shell:has(.pause-overlay) *::before { animation-play-state: paused; }
+@keyframes jelly-ready { from { transform: translateY(0) scale(1); } to { transform: translateY(-3px) scale(1.04,.97); } }
+@keyframes jelly-pop { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.18,.9); opacity: 1; } 100% { transform: scale(.35); opacity: 0; } }
+@keyframes jelly-ring { from { transform: scale(.65); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
+@media (max-height: 600px) { .match-board { min-width: min(270px, 100%); }.battle-shell { height: auto; } }
+@media (min-width: 700px) and (max-height: 800px) {
+  .battle-shell { gap: 6px; padding-top: 9px; padding-bottom: 8px; }
+  .enemy-panel { min-height: 106px; padding-top: 8px; padding-bottom: 8px; }
+  .enemy-panel__figure .enemy-art { max-height: 100px; }
+  .character-card { padding-top: 3px; padding-bottom: 3px; }
+  .character-card__portrait { width: 35px; height: 36px; }
+  .stats-panel { min-height: 46px; padding-top: 4px; padding-bottom: 4px; }
+  .board-heading { min-height: 25px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-cell--selected .jelly-art, .match-board--popping .board-cell--match .jelly-art,
+  .match-board--popping .board-cell--match::before { animation: none; }
+}

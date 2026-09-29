@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CharacterArt, EnemyArt, JellyTile } from './components/GameArt';
 import { CHARACTERS } from './game/content/characters';
@@ -102,6 +102,12 @@ export default function App() {
   const [seedLabel, setSeedLabel] = useState('');
 
   const busyRef = useRef(false);
+  const runRef = useRef(0);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const positionsRef = useRef(new Map<string, { x: number; y: number }>());
+  const gestureRef = useRef<{ id: number; x: number; y: number; cell: Cell } | null>(null);
+  const suppressClickRef = useRef(false);
+  const [popping, setPopping] = useState(false);
   const pauseRef = useRef(false);
   const hiddenRef = useRef(false);
   const fastRef = useRef(false);
@@ -123,6 +129,34 @@ export default function App() {
 
   const play = (cue: string) => { if (soundRef.current) makeSound(cue); };
 
+  useLayoutEffect(() => {
+    const next = new Map<string, { x: number; y: number }>();
+    const animations: Animation[] = [];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    boardRef.current?.querySelectorAll<HTMLElement>('[data-tile-id]').forEach((element) => {
+      const cell = element.parentElement!;
+      const point = { x: cell.offsetLeft, y: cell.offsetTop };
+      const previous = positionsRef.current.get(element.dataset.tileId!);
+      next.set(element.dataset.tileId!, point);
+      if (reduced || skipAnimation || !positionsRef.current.size) return;
+      const x = previous ? previous.x - point.x : 0;
+      const y = previous ? previous.y - point.y : -cell.offsetHeight;
+      if (x || y) animations.push(element.animate([
+        { transform: `translate(${x}px, ${y}px)`, opacity: previous ? 1 : 0 },
+        { transform: 'translate(0, 0)', opacity: 1 },
+      ], { duration: settings.fast ? 85 : 190, easing: 'cubic-bezier(.2,.7,.3,1)' }));
+    });
+    positionsRef.current = next;
+    return () => animations.forEach((animation) => animation.cancel());
+  }, [displayBoard, settings.fast, skipAnimation]);
+
+  useEffect(() => {
+    boardRef.current?.getAnimations({ subtree: true }).forEach((animation) => {
+      if (paused || hiddenPause) animation.pause();
+      else if (animation.playState === 'paused') animation.play();
+    });
+  }, [paused, hiddenPause, displayBoard]);
+
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -142,6 +176,8 @@ export default function App() {
   }, []);
 
   const wait = (duration: number) => new Promise<void>((resolve) => {
+    const run = runRef.current;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) duration = Math.min(duration, 35);
     if (skipRef.current && !pauseRef.current && !hiddenRef.current) { resolve(); return; }
     let remaining = duration;
     let last = performance.now();
@@ -151,7 +187,7 @@ export default function App() {
       const now = performance.now();
       if (!pauseRef.current && !hiddenRef.current) remaining = skipRef.current ? 0 : remaining - (now - last);
       last = now;
-      if (remaining <= 0) { resolve(); return; }
+      if (remaining <= 0 || run !== runRef.current) { resolve(); return; }
       timer = setTimeout(tick, pauseRef.current || hiddenRef.current ? 100 : 25);
       pulseTimers.current.add(timer);
     };
@@ -184,6 +220,8 @@ export default function App() {
   const startStage = (stageIndex: number, forceSeed?: string) => {
     const stage = STAGES[stageIndex];
     if (!stage) return;
+    cancelResolution();
+    positionsRef.current.clear();
     const nextSeed = forceSeed?.trim() ? forceSeed.trim() : `${(Date.now() >>> 0).toString(16).padStart(8, '0')}`;
     const random = new SeededRandom(nextSeed);
     rngRef.current = random;
@@ -218,6 +256,7 @@ export default function App() {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
+    const run = runRef.current;
     if (accepted) {
       setDisplayStats(emptyTurnStats());
       setDisplayCharacterStats(emptyCharacterStats());
@@ -227,20 +266,23 @@ export default function App() {
     }
     try {
       for (const event of events) {
+        if (run !== runRef.current) return;
         switch (event.type) {
           case 'SWAP':
             setDisplayBoard(event.board); setSelected(null); play('swap');
-            await wait(fastRef.current ? 36 : 75); break;
+            await wait(fastRef.current ? 90 : 200); break;
           case 'INVALID_SWAP':
             setDisplayBoard(event.board); setSelected(null); setInvalidCells(new Set([`${event.a.row},${event.a.col}`, `${event.b.row},${event.b.col}`])); setLastAction('沒有連成三個，再試一次！'); play('invalid');
-            await wait(fastRef.current ? 50 : 155); setLastAction(''); setInvalidCells(new Set()); break;
+            await wait(fastRef.current ? 100 : 260); if (run !== runRef.current) return; setInvalidCells(new Set()); break;
           case 'MATCH_FOUND':
             setDisplayBoard(event.board); setMatches(new Set(event.cells.map((c) => `${c.row},${c.col}`)));
             await wait(fastRef.current ? 40 : 115); break;
           case 'JELLY_POP':
-            setDisplayBoard(event.board); play(event.cascade > 1 ? 'cascade' : 'pop');
+            setPopping(true); play(event.cascade > 1 ? 'cascade' : 'pop');
             setDamageToast(event.cascade > 1 ? `CASCADE ${event.cascade}` : 'JELLY POP!');
-            await wait(fastRef.current ? 28 : 80); setMatches(new Set()); break;
+            await wait(fastRef.current ? 90 : 180);
+            if (run !== runRef.current) return;
+            setDisplayBoard(event.board); setPopping(false); setMatches(new Set()); break;
           case 'STAT_GAIN': {
             setDisplayCharacterStats((current) => ({ ...current, [event.characterId]: addGains(current[event.characterId], event.gains) }));
             setDisplayStats((current) => addGains(current, event.gains));
@@ -251,9 +293,9 @@ export default function App() {
             await wait(fastRef.current ? 12 : 30); break;
           }
           case 'GRAVITY':
-            setDisplayBoard(event.board); await wait(fastRef.current ? 30 : 90); break;
+            setDisplayBoard(event.board); await wait(fastRef.current ? 90 : 200); break;
           case 'REFILL':
-            setDisplayBoard(event.board); setMatches(new Set()); await wait(fastRef.current ? 38 : 100); break;
+            setDisplayBoard(event.board); setMatches(new Set()); await wait(fastRef.current ? 90 : 200); break;
           case 'CASCADE_START':
             setDamageToast(`連鎖 × ${event.cascade - 1}`); play('cascade'); await wait(fastRef.current ? 22 : 85); break;
           case 'TURN_TOTAL':
@@ -267,6 +309,7 @@ export default function App() {
             setDamageToast(event.shieldDamage ? `DAMAGE ${event.damage}  ·  SHIELD −${event.shieldDamage}` : `DAMAGE ${event.damage}`);
             play('hit');
             await wait(fastRef.current ? 130 : 380);
+            if (run !== runRef.current) return;
             setHurt(false); setAttackFlash(false); setActiveCharacter(null); break;
           case 'ENEMY_ACTION':
             setLastAction(`NEXT：${event.message}`); await wait(fastRef.current ? 42 : 145); break;
@@ -279,6 +322,7 @@ export default function App() {
           case 'DEFEAT': setLastAction('再試一次！'); play('lose'); await wait(fastRef.current ? 100 : 300); break;
         }
       }
+      if (run !== runRef.current) return;
       setBattle(result);
       setDisplayBoard(boardCopy(result.board));
       setEnemyHp(result.enemyHp);
@@ -291,17 +335,31 @@ export default function App() {
         const saved = saveStageClear(displayedStageIndexRef.current);
         setProgress(saved);
         await wait(fastRef.current ? 100 : 300);
-        setScreen('result');
+        if (run === runRef.current) setScreen('result');
       } else if (result.status === 'defeat') {
         await wait(fastRef.current ? 100 : 300);
-        setScreen('result');
+        if (run === runRef.current) setScreen('result');
       }
     } finally {
-      busyRef.current = false;
-      setBusy(false);
-      setSkipAnimation(false);
+      if (run === runRef.current) {
+        busyRef.current = false;
+        setBusy(false);
+        setSkipAnimation(false);
+      }
     }
   };
+
+  const cancelResolution = () => {
+    runRef.current += 1;
+    busyRef.current = false;
+    gestureRef.current = null;
+    setBusy(false); setPaused(false); setHiddenPause(false); setPopping(false);
+    setSelected(null); setMatches(new Set()); setInvalidCells(new Set());
+    for (const timer of floatTimers.current.values()) clearTimeout(timer);
+    floatTimers.current.clear();
+  };
+
+  const leaveBattle = () => { cancelResolution(); setScreen('select'); };
 
   const attemptSwap = (a: Cell, b: Cell) => {
     if (!battle || busyRef.current || paused || battle.status !== 'playing') return;
@@ -311,7 +369,7 @@ export default function App() {
   };
 
   const selectTile = (cell: Cell) => {
-    if (busy || !battle) return;
+    if (busyRef.current || paused || !battle) return;
     if (!selected) { setSelected(cell); return; }
     if (selected.row === cell.row && selected.col === cell.col) { setSelected(null); return; }
     if (Math.abs(selected.row - cell.row) + Math.abs(selected.col - cell.col) === 1) {
@@ -321,10 +379,12 @@ export default function App() {
   };
 
   const handleCellKey = (event: KeyboardEvent<HTMLButtonElement>, cell: Cell) => {
+    if (event.key === 'Escape') { setSelected(null); return; }
     const directions: Record<string, Cell> = { ArrowUp: { row: -1, col: 0 }, ArrowDown: { row: 1, col: 0 }, ArrowLeft: { row: 0, col: -1 }, ArrowRight: { row: 0, col: 1 } };
     const delta = directions[event.key];
     if (delta) {
       event.preventDefault();
+      if (event.shiftKey) { attemptSwap(cell, { row: cell.row + delta.row, col: cell.col + delta.col }); return; }
       const row = Math.max(0, Math.min(5, cell.row + delta.row));
       const col = Math.max(0, Math.min(5, cell.col + delta.col));
       document.getElementById(`cell-${row}-${col}`)?.focus();
@@ -414,10 +474,10 @@ export default function App() {
       <div className="selection-note"><span>✦</span>關卡進度會保存在這台裝置，擊敗對手就能前往下一站。</div>
     </main>}
 
-    {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','orange','white','purple','red','orange','white','green','orange','white','green','purple','red','white','green','purple','red','orange','purple','red','orange','white','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>選兩顆相鄰的水母，連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
+    {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','orange','white','purple','red','orange','white','green','orange','white','green','purple','red','white','green','purple','red','orange','purple','red','orange','white','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
 
     {screen === 'battle' && battle && <main className="battle-shell">
-      <header className="battle-topbar"><button className="battle-exit" onClick={() => { if (!busy) setScreen('select'); }} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>{battle.stage.title}</span></div><div className="battle-utilities"><button className={settings.fast ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ fast: !settings.fast })} aria-pressed={settings.fast} aria-label={settings.fast ? '關閉快速模式' : '開啟快速模式'}>FAST</button><button className={settings.sound ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ sound: !settings.sound })} aria-label={settings.sound ? '關閉音效' : '開啟音效'}>♫</button><button className="tool-button" onClick={() => { setPaused(true); }} aria-label="暫停">Ⅱ</button></div></header>
+      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>{battle.stage.title}</span></div><div className="battle-utilities"><button className={settings.fast ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ fast: !settings.fast })} aria-pressed={settings.fast} aria-label={settings.fast ? '關閉快速模式' : '開啟快速模式'}>FAST</button><button className={settings.sound ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ sound: !settings.sound })} aria-label={settings.sound ? '關閉音效' : '開啟音效'}>♫</button><button className="tool-button" onClick={() => { setPaused(true); }} aria-label="暫停">Ⅱ</button></div></header>
 
       <section className={`enemy-panel${hurt ? ' enemy-panel--hurt' : ''}${attackFlash ? ' enemy-panel--flash' : ''}`}>
         <div className="enemy-panel__copy"><div className="enemy-type-label">{battle.enemy.type === 'boss' ? <><i>✦</i> BOSS BATTLE</> : <>CHAPTER {battle.stage.chapter} · STAGE</>}</div><h1>{battle.enemy.name}</h1><p>{lastAction || battle.enemy.tagline}</p><div className="enemy-next"><span>NEXT</span><b>{actionText(battle)}</b></div>
@@ -447,16 +507,39 @@ export default function App() {
       <StatsPanel stats={displayStats} power={displayPower} animate={Boolean(busy)} />
 
       <section className={`board-section${battle.darkTurns > 0 ? ' board-section--dim' : ''}${busy ? ' board-section--busy' : ''}`} aria-label="6 乘 6 水母盤面">
-        <div className="board-heading"><div><span>JELLY FIELD</span><b>交換相鄰水母，連成 3 個以上</b></div><span className="board-tip">{busy ? '夥伴能量集結中…' : selected ? '再選一顆相鄰水母' : '點選兩顆水母交換'}</span></div>
-        <div className="match-board" role="grid" aria-label="水母消除盤面">
+        <div className="board-heading"><div><span>JELLY FIELD</span><b>交換相鄰水母，連成 3 個以上</b></div><span className="board-tip">{busy ? '夥伴能量集結中…' : selected ? '再選一顆相鄰水母' : '滑動交換・也可點選兩格'}</span></div>
+        <div ref={boardRef} className={`match-board${popping ? ' match-board--popping' : ''}${settings.fast ? ' match-board--fast' : ''}`} role="group" aria-label="水母消除盤面：滑動或點選兩格交換；方向鍵移動，Shift 加方向鍵交換，Escape 取消選取" aria-busy={busy}>
           {displayBoard.flatMap((row, rowIndex) => row.map((tile, colIndex) => {
             const cell = { row: rowIndex, col: colIndex };
             const sel = selected?.row === rowIndex && selected.col === colIndex;
             const activeMatch = matches.has(`${rowIndex},${colIndex}`);
             const character = tile ? characterForColor(tile.color) : null;
             const label = tile ? `${character?.id} ${tile.color} 水母，第 ${rowIndex+1} 列第 ${colIndex+1} 欄${tile.lockHits ? '，被障礙鎖住' : ''}${tile.fog ? '，迷霧覆蓋但顏色可辨識' : ''}${tile.confused ? '，有問號標記' : ''}` : `空格，第 ${rowIndex+1} 列第 ${colIndex+1} 欄`;
-            return <button id={`cell-${rowIndex}-${colIndex}`} key={tile?.id ?? `empty-${rowIndex}-${colIndex}`} type="button" role="gridcell" className={`board-cell${sel ? ' board-cell--selected' : ''}${activeMatch ? ' board-cell--match' : ''}${invalidCells.has(`${rowIndex},${colIndex}`) ? ' board-cell--invalid' : ''}${tile?.lockHits ? ' board-cell--locked' : ''}`} aria-label={label} aria-selected={sel} disabled={busy || paused || !tile || Boolean(tile.lockHits) || battle.status !== 'playing'} onClick={() => selectTile(cell)} onKeyDown={(e) => handleCellKey(e, cell)} data-testid={`cell-${rowIndex}-${colIndex}`}>
-              {tile && <JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits} confused={tile.confused} dimmed={battle.darkTurns > 0}/>} 
+            return <button id={`cell-${rowIndex}-${colIndex}`} key={`${rowIndex}-${colIndex}`} type="button" className={`board-cell${sel ? ' board-cell--selected' : ''}${activeMatch ? ' board-cell--match' : ''}${invalidCells.has(`${rowIndex},${colIndex}`) ? ' board-cell--invalid' : ''}${tile?.lockHits ? ' board-cell--locked' : ''}`} aria-label={label} aria-pressed={sel} disabled={busy || paused || !tile || Boolean(tile.lockHits) || battle.status !== 'playing'} onPointerDown={(event) => {
+                if (event.button !== 0 || !event.isPrimary || busyRef.current) return;
+                suppressClickRef.current = false;
+                gestureRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, cell };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }} onPointerUp={(event) => {
+                const gesture = gestureRef.current;
+                gestureRef.current = null;
+                if (!gesture || gesture.id !== event.pointerId) return;
+                const dx = event.clientX - gesture.x;
+                const dy = event.clientY - gesture.y;
+                const threshold = Math.max(12, event.currentTarget.clientWidth * .22);
+                if (Math.max(Math.abs(dx), Math.abs(dy)) < threshold) return;
+                suppressClickRef.current = true;
+                const target = Math.abs(dx) > Math.abs(dy)
+                  ? { row: gesture.cell.row, col: gesture.cell.col + Math.sign(dx) }
+                  : { row: gesture.cell.row + Math.sign(dy), col: gesture.cell.col };
+                if (!displayBoard[target.row]?.[target.col] || displayBoard[target.row]?.[target.col]?.lockHits) return;
+                attemptSwap(gesture.cell, target);
+              }} onPointerCancel={() => { gestureRef.current = null; }} onLostPointerCapture={() => { gestureRef.current = null; }}
+              onClick={(event) => {
+                if (event.detail > 0 && suppressClickRef.current) { suppressClickRef.current = false; return; }
+                selectTile(cell);
+              }} onKeyDown={(e) => handleCellKey(e, cell)} data-testid={`cell-${rowIndex}-${colIndex}`}>
+              {tile && <span className="tile-motion" data-tile-id={tile.id}><JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits} confused={tile.confused} dimmed={battle.darkTurns > 0}/></span>}
             </button>;
           }))}
         </div>
@@ -467,7 +550,7 @@ export default function App() {
 
       {isDebug && showDebug && <section className="debug-panel"><div className="debug-panel__head"><b>DEBUG PANEL</b><span>SEED {seedLabel}</span><button onClick={() => setShowDebug(false)}>收起 ×</button></div><div className="debug-seed"><input value={debugSeed} onChange={(e) => setDebugSeed(e.target.value)} aria-label="輸入 RNG Seed"/><button onClick={() => startStage(displayedStageIndexRef.current, debugSeed)}>套用 Seed</button><button onClick={() => pushLog(`RNG seed ${seedLabel}`)}>顯示 Seed</button></div><div className="debug-actions"><button onClick={debugWin}>Win Stage</button><button onClick={() => debugNudge('enemy')}>Boss HP −50</button><button onClick={() => debugNudge('player')}>Player HP −20</button><button onClick={() => startStage(displayedStageIndexRef.current, seedLabel)}>Reset Stage</button><button onClick={() => { setProgress(unlockAll()); }}>Unlock All Stages</button><button onClick={debugCascade}>Force Cascade Board</button>{CHARACTER_IDS.map((id) => <button key={id} onClick={() => debugResolution(CHARACTERS[id].color)}>Force {id} Match</button>)}</div><div className="debug-log"><b>Last Turn Stats · {totalPower(battle.turnStats)} TOTAL</b>{STAT_KEYS.map((s) => <span key={s}>{s} {battle.turnStats[s]}</span>)}<details><summary>Event Log（最近 24 則）</summary>{eventLog.slice(-24).map((entry,i)=><p key={`${i}-${entry}`}>{entry}</p>)}</details></div></section>}
 
-      {(paused || hiddenPause) && <div className="pause-overlay" role="dialog" aria-modal="true"><div className="pause-card"><div className="pause-icon">Ⅱ</div><span className="eyebrow">TAKE YOUR TIME</span><h2>{hiddenPause ? '先休息一下。' : '暫停中'}</h2><p>回來後按下繼續，冒險會從這裡接上。</p><button className="primary-button" onClick={() => { setPaused(false); setHiddenPause(false); }}>繼續冒險 <span>→</span></button><button className="pause-exit" onClick={() => { if (!busy) setScreen('select'); setPaused(false); setHiddenPause(false); }}>返回關卡</button></div></div>}
+      {(paused || hiddenPause) && <div className="pause-overlay" role="dialog" aria-modal="true"><div className="pause-card"><div className="pause-icon">Ⅱ</div><span className="eyebrow">TAKE YOUR TIME</span><h2>{hiddenPause ? '先休息一下。' : '暫停中'}</h2><p>回來後按下繼續，冒險會從這裡接上。</p><button className="primary-button" onClick={() => { setPaused(false); setHiddenPause(false); }}>繼續冒險 <span>→</span></button><button className="pause-exit" onClick={leaveBattle}>返回關卡</button></div></div>}
       {busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} aria-label="略過目前動畫">SKIP ↗</button>}
     </main>}
 
