@@ -12,7 +12,6 @@
 .battlefield--charging .battlefield-enemy::after { content: ""; position: absolute; inset: 8%; border: 2px solid #a88ada9c; border-radius: 48%; box-shadow: 0 0 15px #ad91d8a3; animation: boss-charge-pulse .9s ease-in-out infinite alternate; pointer-events: none; }
 .battlefield-hud { position: relative; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 15px 0; }
 .battlefield-title > span { color: #9687bc; font: 900 8px 'Nunito',sans-serif; letter-spacing: .16em; }
-.battlefield-title h1 { margin: 3px 0 0; color: #475470; font-size: 16px; }
 .battlefield-vitals { width: 42%; max-width: 200px; }
 .battlefield-hp-label { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; color: #9990a5; font-size: 8px; }
 .battlefield-hp-label b { color: #63718d; font-variant-numeric: tabular-nums; }
@@ -29,6 +28,7 @@
 .battlefield-cue { position: absolute; z-index: 12; top: 0; left: 40%; width: 56%; text-align: center; color: #9582b9; font: 900 10px 'Nunito',sans-serif; letter-spacing: .07em; }
 .battlefield-enemy { position: absolute; left: 67%; top: 21%; width: 31%; height: 65%; z-index: 2; transition: transform .18s ease-out; }
 .battlefield-enemy > svg { position: relative; width: 100%; height: 100%; overflow: visible; }
+.battlefield-enemy-name { position: absolute; top: calc(100% + 2px); left: 50%; z-index: 4; margin: 0; padding: 2px 8px; transform: translateX(-50%); border: 1px solid #e4dfef; border-radius: 999px; color: #59617b; background: #ffffffed; box-shadow: 0 2px 7px #46506d20; font: 900 9px/1.2 'Nunito',sans-serif; white-space: nowrap; }
 .battlefield-enemy-shadow { position: absolute; left: 8%; right: 4%; bottom: 6%; height: 15%; border-radius: 50%; background: #70699f20; filter: blur(3px); }
 .battlefield-hero { position: absolute; left: var(--home-x); top: var(--home-y); width: clamp(39px,10vw,58px); height: clamp(44px,11vw,64px); padding: 0; border: 0; color: inherit; background: transparent; appearance: none; text-align: center; cursor: pointer; transform: translateY(-50%); transition: left var(--rush-time) cubic-bezier(.5,0,.2,1),top var(--rush-time) ease-out,transform var(--rush-time) ease-out; }
 .battlefield-hero:focus-visible { z-index: 11 !important; outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 15px; }
@@ -92,7 +92,6 @@
 @media (max-width: 430px) {
   .battlefield { border-radius: 15px; }
   .battlefield-hud { padding: 9px 10px 0; }
-  .battlefield-title h1 { font-size: 14px; }
   .battlefield-title > span { font-size: 7px; }
   .battlefield-scene { height: 158px; }
   .battlefield-caption { gap: 5px; padding: 5px 9px; min-height: 27px; }

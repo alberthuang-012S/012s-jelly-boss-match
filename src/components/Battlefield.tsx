@@ -54,7 +54,7 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, s
   const hitting = strike.phase === 'impact' || strike.phase === 'recover';
   return <section ref={fieldRef} className={`battlefield battlefield--${strike.phase} battlefield--chain-${strike.chainWaves}${bossCharge ? ' battlefield--charging' : ''}${strike.fast ? ' battlefield--fast' : ''}${playerHurt ? ' battlefield--player-hit' : ''}${paused ? ' battlefield--paused' : ''}${skipping ? ' battlefield--skip' : ''}`} aria-label="小隊戰場">
     <header className="battlefield-hud">
-      <div className="battlefield-title"><span>{enemy.type === 'boss' ? 'BOSS BATTLE' : 'JELLY SQUAD'}</span><h1>{enemy.name}</h1></div>
+      <div className="battlefield-title"><span>{enemy.type === 'boss' ? 'BOSS BATTLE' : 'JELLY SQUAD'}</span></div>
       <div className="battlefield-vitals">
         <div className="battlefield-hp-label"><span>敵人 HP</span><b>{hp}<small> / {enemy.maxHp}</small></b></div>
         <div className="battlefield-hp" role="progressbar" aria-label="敵人 HP" aria-valuemin={0} aria-valuemax={enemy.maxHp} aria-valuenow={hp}>
@@ -73,6 +73,7 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, s
       <div className="battlefield-enemy">
         <div className="battlefield-enemy-shadow" />
         <EnemyArt kind={enemy.kind} hurt={hitting} />
+        <h1 className="battlefield-enemy-name">{enemy.name}</h1>
       </div>
 
       {CHARACTER_IDS.map((id, index) => {
