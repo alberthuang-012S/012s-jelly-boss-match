@@ -1,0 +1,47 @@
+# 012S Jelly Boss Match
+
+手機優先的手動三消戰鬥遊戲。五位 012S 膠囊夥伴透過水母連鎖累積九項能量，再把整回合數值集中為一次攻擊。
+
+## 開始遊玩
+
+```bash
+pnpm install
+pnpm dev
+```
+
+開啟終端顯示的本機網址即可遊玩。首頁可進入關卡選擇、玩法說明或調整音效。進入戰鬥後，連點兩顆相鄰水母進行交換；沒有 Match 的交換會自動還原且不耗回合。也可以用鍵盤 Tab 聚焦水母，再以方向鍵移動焦點、Enter 選擇。
+
+## 回合規則
+
+- 六乘六盤面使用 5 種水母，每顆都有唯一 instance ID。
+- 一顆水母 Match 時，對應角色三項主屬性各自必定增加 +1～3，再從其他六項屬性抽 0～2 項（不重複），各增加 +1～3。
+- T、L、交叉與長 Match 都以唯一水母 instance 結算；重力、補入、連鎖會一路處理到穩定，最多 20 層。
+- `characterTurnStats` 是五位角色在目前回合的屬性；`turnStats` 是它們逐項加總；`stageStats` 保存整關累積。一次有效交換只產生一個玩家回合、一次最終攻擊與一次敵人行動。
+- 初期敵人每項倍率皆為 1；Boss 可在傷害結算端調整倍率。弱點不影響水母的原始隨機屬性。
+- FAST、暫停、略過動畫與音效不會更改戰鬥 RNG。音效預設關閉。
+
+## 角色與關卡
+
+| 角色 | 水母 | 保證主屬性 |
+|---|---|---|
+| PNN | green | Pai / Tum / Eye |
+| QCC | purple | Bra / Eye / Vir |
+| REE | red | Sch / Neu / Pre |
+| KTT | orange | Vir / Tum / Bac |
+| AII | white | Pre / Bra / Pai |
+
+目前包含細菌怪小隊、噴嚏雲怪、沒精神怪、健忘怪、眼睛模糊怪 Boss、三高怪 Boss、黏液怪與關節痠痛巨像 Boss，共 8 關。擊敗對手後會用 localStorage 解鎖下一關；每關結算會顯示回合、傷害、連鎖與九項能量總計。
+
+## 開發指令
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm build
+```
+
+追加 `?debug=1` 可開啟測試面板，支援指定 Seed、強制角色 Match／Cascade、快速勝利、HP 調整、關卡重置、全關解鎖及 Event Log。
+
+## 素材
+
+`reference/` 保留原始素材。遊戲盤面使用 `/public/assets/jellies/` 中的 5 張 WebP；orange 由黃色參考圖經 CSS 色相調整，white 由 aqua 參考圖去飽和並加強深色輪廓。角色夥伴與 8 種敵人以專案內 SVG 繪製，沒有外部字型、圖片服務或 API 依賴。
