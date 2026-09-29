@@ -1,9 +1,9 @@
 export const STAT_KEYS = ['Bra', 'Sch', 'Neu', 'Pai', 'Tum', 'Vir', 'Bac', 'Eye', 'Pre'] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 
-export const CHARACTER_IDS = ['PNN', 'QCC', 'REE', 'KTT', 'AII'] as const;
+export const CHARACTER_IDS = ['PNN', 'QCC', 'REE', 'KTT', 'COO'] as const;
 export type CharacterId = (typeof CHARACTER_IDS)[number];
-export const JELLY_COLORS = ['green', 'purple', 'red', 'orange', 'white'] as const;
+export const JELLY_COLORS = ['green', 'purple', 'red', 'cyan', 'yellow'] as const;
 export type JellyColor = (typeof JELLY_COLORS)[number];
 
 export type CharacterConfig = {

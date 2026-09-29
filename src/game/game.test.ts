@@ -96,19 +96,19 @@ describe('board rules', () => {
   });
 
   it('finds vertical matches', () => {
-    const board = blankBoardWithout('orange');
+    const board = blankBoardWithout('yellow');
     for (let row = 0; row < 4; row += 1) set(board, row, 3, 'purple');
     expect(findMatches(board).filter((cell) => cell.col === 3).length).toBe(4);
   });
 
   it.each(['L', 'T', 'cross'])('deduplicates tile instances in a %s overlap', (shape) => {
-    const board = blankBoardWithout('orange');
+    const board = blankBoardWithout('yellow');
     const cells = shape === 'L'
       ? [[2,1],[2,2],[2,3],[3,1],[4,1]]
       : shape === 'T'
         ? [[2,1],[2,2],[2,3],[3,2],[4,2]]
         : [[2,1],[2,2],[2,3],[1,2],[3,2]];
-    for (const [row, col] of cells) set(board, row!, col!, 'orange');
+    for (const [row, col] of cells) set(board, row!, col!, 'yellow');
     const found = findMatches(board);
     expect(found).toHaveLength(cells.length);
     expect(new Set(found.map((cell) => board[cell.row]![cell.col]!.id)).size).toBe(cells.length);
@@ -123,7 +123,7 @@ describe('board rules', () => {
   });
 
   it('applies gravity while preserving locked barriers and tile order', () => {
-    const board = blankBoardWithout('orange');
+    const board = blankBoardWithout('yellow');
     const a = board[0]![0]!; const b = board[2]![0]!; const wall = board[3]![0]!;
     wall.lockHits = 2;
     board[1]![0] = null; board[2]![0] = b; board[4]![0] = null;
@@ -138,7 +138,7 @@ describe('board rules', () => {
   it('refills empty cells with unique new instance IDs', () => {
     const board = blankBoardWithout('green');
     board[0]![1] = null; board[0]![4] = null;
-    const refilled = refillBoard(board, 100, (id) => ({ id: `j${id}`, color: 'white' }));
+    const refilled = refillBoard(board, 100, (id) => ({ id: `j${id}`, color: 'cyan' }));
     expect(refilled.board.flat().every(Boolean)).toBe(true);
     expect(refilled.board[0]![1]!.id).toBe('j100');
     expect(refilled.board[0]![4]!.id).toBe('j101');
@@ -190,7 +190,7 @@ describe('characters and per-tile stat generation', () => {
 
   it.each(CHARACTER_IDS)('%s has exactly the specified three main stats', (id) => {
     const expected = {
-      PNN: ['Pai','Tum','Eye'], QCC: ['Bra','Eye','Vir'], REE: ['Sch','Neu','Pre'], KTT: ['Vir','Tum','Bac'], AII: ['Pre','Bra','Pai'],
+      PNN: ['Pai','Tum','Eye'], QCC: ['Bra','Eye','Vir'], REE: ['Sch','Neu','Pre'], KTT: ['Vir','Tum','Bac'], COO: ['Pre','Bra','Pai'],
     }[id];
     expect(CHARACTERS[id].mainStats).toEqual(expected);
     expect(new Set(CHARACTERS[id].mainStats).size).toBe(3);

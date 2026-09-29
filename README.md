@@ -13,6 +13,8 @@ pnpm dev
 
 交換、掉落與補入會顯示水母移動，消除時會縮放並散開光圈。FAST 會同步縮短移動時間，並尊重系統的減少動態效果偏好。動畫中可暫停或直接返回選關，離開後未完成的播放會取消。
 
+戰鬥上方為小隊與敵人同場的戰場。當回合有累積能量的角色會蓄力、衝向敵人合擊，再退回陣型；命中帶有短暫停頓、傷害跳字、受擊與血條殘影，擊破護盾時另有提示。角色下方只顯示名稱，能量統一顯示於總能量與九項屬性列。演出不改變傷害、敵人招式或回合規則。
+
 ## 回合規則
 
 - 六乘六盤面使用 5 種水母，每顆都有唯一 instance ID。
@@ -29,8 +31,8 @@ pnpm dev
 | PNN | green | Pai / Tum / Eye |
 | QCC | purple | Bra / Eye / Vir |
 | REE | red | Sch / Neu / Pre |
-| KTT | orange | Vir / Tum / Bac |
-| AII | white | Pre / Bra / Pai |
+| KTT | cyan（水藍） | Vir / Tum / Bac |
+| COO | yellow（黃） | Pre / Bra / Pai |
 
 目前包含細菌怪小隊、噴嚏雲怪、沒精神怪、健忘怪、眼睛模糊怪 Boss、三高怪 Boss、黏液怪與關節痠痛巨像 Boss，共 8 關。擊敗對手後會用 localStorage 解鎖下一關；每關結算會顯示回合、傷害、連鎖與九項能量總計。
 
@@ -46,4 +48,4 @@ pnpm build
 
 ## 素材
 
-`reference/` 保留原始素材。遊戲盤面使用 `/public/assets/jellies/` 中的 5 張 WebP；orange 由黃色參考圖經 CSS 色相調整，white 由 aqua 參考圖去飽和並加強深色輪廓。角色夥伴與 8 種敵人以專案內 SVG 繪製，沒有外部字型、圖片服務或 API 依賴。
+`reference/` 保留原始素材。遊戲盤面使用 `/public/assets/jellies/` 中的 5 張 WebP，包含 cyan（水藍）與 yellow（黃）水母。角色夥伴與 8 種敵人以專案內 SVG 繪製，沒有外部字型、圖片服務或 API 依賴。

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CharacterArt, EnemyArt, JellyTile } from './components/GameArt';
+import { Battlefield, idleStrike, type StrikeState } from './components/Battlefield';
 import { CHARACTERS } from './game/content/characters';
 import { characterForColor } from './game/content/characters';
 import { ENEMIES } from './game/content/enemies';
@@ -8,14 +9,13 @@ import { STAGES } from './game/content/stages';
 import { SeededRandom } from './game/rng/SeededRandom';
 import { createBattle } from './game/battle/battleFactory';
 import { forceCascadeTurn, forceMatchTurn, resolveTurn } from './game/battle/turnResolver';
-import { emptyCharacterStats, addGains, totalPower } from './game/stats/statAggregator';
+import { addGains, totalPower } from './game/stats/statAggregator';
 import { emptyTurnStats } from './game/stats/statGenerator';
 import { CHARACTER_IDS, STAT_KEYS, type BattleEvent, type BattleState, type CharacterId, type Cell, type JellyColor, type StatKey, type TurnStats } from './game/types';
 import { loadProgress, loadSettings, saveSettings, saveStageClear, unlockAll } from './storage/progress';
 import type { GameSettings } from './storage/progress';
 
 type Screen = 'home' | 'select' | 'battle' | 'result' | 'help';
-type FloatEffect = { text: string; key: number };
 const statLabel = (stat: StatKey) => stat.toUpperCase();
 const boardCopy = (board: BattleState['board']) => board.map((row) => row.map((tile) => tile ? { ...tile } : null));
 
@@ -78,7 +78,6 @@ export default function App() {
   const [battle, setBattle] = useState<BattleState | null>(null);
   const [displayBoard, setDisplayBoard] = useState<BattleState['board']>([]);
   const [displayStats, setDisplayStats] = useState<TurnStats>(emptyTurnStats);
-  const [displayCharacterStats, setDisplayCharacterStats] = useState(() => emptyCharacterStats());
   const [displayPower, setDisplayPower] = useState(0);
   const [enemyHp, setEnemyHp] = useState(0);
   const [enemyShield, setEnemyShield] = useState(0);
@@ -86,7 +85,6 @@ export default function App() {
   const [selected, setSelected] = useState<Cell | null>(null);
   const [matches, setMatches] = useState<Set<string>>(new Set());
   const [invalidCells, setInvalidCells] = useState<Set<string>>(new Set());
-  const [floating, setFloating] = useState<Partial<Record<CharacterId, FloatEffect>>>({});
   const [activeCharacter, setActiveCharacter] = useState<CharacterId | null>(null);
   const [lastAction, setLastAction] = useState('');
   const [damageToast, setDamageToast] = useState('');
@@ -94,8 +92,9 @@ export default function App() {
   const [skipAnimation, setSkipAnimation] = useState(false);
   const [paused, setPaused] = useState(false);
   const [hiddenPause, setHiddenPause] = useState(false);
-  const [hurt, setHurt] = useState(false);
-  const [attackFlash, setAttackFlash] = useState(false);
+  const [strike, setStrike] = useState<StrikeState>(idleStrike);
+  const [playerHurt, setPlayerHurt] = useState(false);
+  const attackFastRef = useRef(false);
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const [debugSeed, setDebugSeed] = useState('01252026');
@@ -115,9 +114,7 @@ export default function App() {
   const skipRef = useRef(false);
   const rngRef = useRef<SeededRandom | null>(null);
   const displayedStageIndexRef = useRef(0);
-  const floatTimers = useRef(new Map<CharacterId, ReturnType<typeof setTimeout>>());
   const pulseTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  const floatKeyRef = useRef(0);
   const makeSound = useMemo(makeCue, []);
   const isDebug = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
 
@@ -171,7 +168,6 @@ export default function App() {
   }, []);
 
   useEffect(() => () => {
-    for (const timer of floatTimers.current.values()) clearTimeout(timer);
     for (const timer of pulseTimers.current) clearTimeout(timer);
   }, []);
 
@@ -196,27 +192,6 @@ export default function App() {
   });
 
   const pushLog = (message: string) => setEventLog((log) => [...log.slice(-23), message]);
-  const showFloat = (id: CharacterId, gains: { stat: StatKey; amount: number }[]) => {
-    setFloating((current) => {
-      const totals: Partial<Record<StatKey, number>> = {};
-      const prev = current[id]?.text.split(' · ') ?? [];
-      for (const part of prev) {
-        const match = /^(\w+) \+(\d+)$/.exec(part);
-        if (match && STAT_KEYS.includes(match[1] as StatKey)) totals[match[1] as StatKey] = Number(match[2]);
-      }
-      for (const gain of gains) totals[gain.stat] = (totals[gain.stat] ?? 0) + gain.amount;
-      const text = STAT_KEYS.filter((key) => totals[key]).map((key) => `${key} +${totals[key]}`).join(' · ');
-      return { ...current, [id]: { text, key: ++floatKeyRef.current } };
-    });
-    const old = floatTimers.current.get(id);
-    if (old) clearTimeout(old);
-    const timer = setTimeout(() => {
-      setFloating((current) => { const next = { ...current }; delete next[id]; return next; });
-      floatTimers.current.delete(id);
-    }, 1050);
-    floatTimers.current.set(id, timer);
-  };
-
   const startStage = (stageIndex: number, forceSeed?: string) => {
     const stage = STAGES[stageIndex];
     if (!stage) return;
@@ -230,7 +205,6 @@ export default function App() {
     setBattle(nextBattle);
     setDisplayBoard(boardCopy(nextBattle.board));
     setDisplayStats(emptyTurnStats());
-    setDisplayCharacterStats(emptyCharacterStats());
     setDisplayPower(0);
     setEnemyHp(nextBattle.enemyHp);
     setEnemyShield(0);
@@ -238,12 +212,11 @@ export default function App() {
     setSelected(null);
     setMatches(new Set());
     setInvalidCells(new Set());
-    setFloating({});
     setActiveCharacter(null);
     setLastAction('');
     setDamageToast('');
-    setHurt(false);
-    setAttackFlash(false);
+    setStrike(idleStrike);
+    setPlayerHurt(false);
     setEventLog([]);
     setSkipAnimation(false);
     setSeedLabel(nextSeed);
@@ -259,9 +232,7 @@ export default function App() {
     const run = runRef.current;
     if (accepted) {
       setDisplayStats(emptyTurnStats());
-      setDisplayCharacterStats(emptyCharacterStats());
       setDisplayPower(0);
-      setFloating({});
       setActiveCharacter(null);
     }
     try {
@@ -284,11 +255,9 @@ export default function App() {
             if (run !== runRef.current) return;
             setDisplayBoard(event.board); setPopping(false); setMatches(new Set()); break;
           case 'STAT_GAIN': {
-            setDisplayCharacterStats((current) => ({ ...current, [event.characterId]: addGains(current[event.characterId], event.gains) }));
             setDisplayStats((current) => addGains(current, event.gains));
             setDisplayPower((current) => current + event.gains.reduce((sum, item) => sum + item.amount, 0));
             setActiveCharacter(event.characterId);
-            showFloat(event.characterId, event.gains);
             play('tick');
             await wait(fastRef.current ? 12 : 30); break;
           }
@@ -302,20 +271,34 @@ export default function App() {
             setDisplayStats(event.stats); setDisplayPower(event.totalPower); setDamageToast(`TOTAL POWER  ${event.totalPower}`);
             await wait(fastRef.current ? 90 : 250); break;
           case 'FINAL_ATTACK':
-            setAttackFlash(true); setActiveCharacter('PNN'); setLastAction(`TOTAL POWER  ${event.totalPower}`); play('attack');
-            await wait(fastRef.current ? 115 : 360); break;
-          case 'ENEMY_DAMAGE':
-            setEnemyHp(event.enemyHp); setEnemyShield(event.enemyShield); setHurt(true);
-            setDamageToast(event.shieldDamage ? `DAMAGE ${event.damage}  ·  SHIELD −${event.shieldDamage}` : `DAMAGE ${event.damage}`);
-            play('hit');
-            await wait(fastRef.current ? 130 : 380);
+            attackFastRef.current = fastRef.current;
+            setStrike({ phase: 'charge', fast: attackFastRef.current, attackers: CHARACTER_IDS.filter((id) => totalPower(result.characterTurnStats[id]) > 0), hit: null });
+            setActiveCharacter(null); setLastAction('小隊出擊！'); setDamageToast('');
+            await wait(attackFastRef.current ? 50 : 120);
             if (run !== runRef.current) return;
-            setHurt(false); setAttackFlash(false); setActiveCharacter(null); break;
+            setStrike((current) => ({ ...current, phase: 'rush' })); play('attack');
+            await wait(attackFastRef.current ? 160 : 350); break;
+          case 'ENEMY_DAMAGE':
+            setEnemyHp(event.enemyHp); setEnemyShield(event.enemyShield);
+            setStrike((current) => ({ ...current, phase: 'impact', hit: { damage: event.damage, shieldDamage: event.shieldDamage, shieldBroken: event.shieldDamage > 0 && event.enemyShield === 0 } }));
+            setLastAction(event.shieldDamage > 0 && event.enemyShield === 0 ? '護盾擊破！' : `小隊合擊 · ${event.damage} 傷害`);
+            play('hit');
+            await wait(attackFastRef.current ? 45 : 95);
+            if (run !== runRef.current) return;
+            setStrike((current) => ({ ...current, phase: 'recover' }));
+            await wait(attackFastRef.current ? 190 : 430);
+            if (run !== runRef.current) return;
+            setStrike(idleStrike); setActiveCharacter(null); break;
           case 'ENEMY_ACTION':
-            setLastAction(`NEXT：${event.message}`); await wait(fastRef.current ? 42 : 145); break;
+            setLastAction(event.message);
+            if (event.action.type === 'attack') setStrike({ ...idleStrike, phase: 'enemy', fast: fastRef.current });
+            await wait(fastRef.current ? 90 : 210); break;
           case 'PLAYER_DAMAGE':
-            setPlayerHp(event.playerHp); setLastAction(`受到 ${event.amount} 點攻擊`); play('player');
-            await wait(fastRef.current ? 48 : 155); break;
+            setPlayerHp(event.playerHp); setPlayerHurt(true); setLastAction(`小隊受到 ${event.amount} 點攻擊`); play('player');
+            setStrike(idleStrike);
+            await wait(fastRef.current ? 110 : 280);
+            if (run !== runRef.current) return;
+            setPlayerHurt(false); break;
           case 'BOARD_EFFECT':
             setDisplayBoard(event.board); setLastAction(event.message); await wait(fastRef.current ? 38 : 120); break;
           case 'VICTORY': setLastAction('CLEAR！'); play('win'); await wait(fastRef.current ? 100 : 300); break;
@@ -329,7 +312,6 @@ export default function App() {
       setEnemyShield(result.enemyShield);
       setPlayerHp(result.playerHp);
       setDisplayStats(result.turnStats);
-      setDisplayCharacterStats(result.characterTurnStats);
       setDisplayPower(result.totalPower);
       if (result.status === 'victory') {
         const saved = saveStageClear(displayedStageIndexRef.current);
@@ -355,8 +337,7 @@ export default function App() {
     gestureRef.current = null;
     setBusy(false); setPaused(false); setHiddenPause(false); setPopping(false);
     setSelected(null); setMatches(new Set()); setInvalidCells(new Set());
-    for (const timer of floatTimers.current.values()) clearTimeout(timer);
-    floatTimers.current.clear();
+    setStrike(idleStrike); setPlayerHurt(false); setDamageToast('');
   };
 
   const leaveBattle = () => { cancelResolution(); setScreen('select'); };
@@ -474,35 +455,15 @@ export default function App() {
       <div className="selection-note"><span>✦</span>關卡進度會保存在這台裝置，擊敗對手就能前往下一站。</div>
     </main>}
 
-    {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','orange','white','purple','red','orange','white','green','orange','white','green','purple','red','white','green','purple','red','orange','purple','red','orange','white','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
+    {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','cyan','yellow','purple','red','cyan','yellow','green','cyan','yellow','green','purple','red','yellow','green','purple','red','cyan','purple','red','cyan','yellow','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
 
     {screen === 'battle' && battle && <main className="battle-shell">
       <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>{battle.stage.title}</span></div><div className="battle-utilities"><button className={settings.fast ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ fast: !settings.fast })} aria-pressed={settings.fast} aria-label={settings.fast ? '關閉快速模式' : '開啟快速模式'}>FAST</button><button className={settings.sound ? 'tool-button is-active' : 'tool-button'} onClick={() => updateSettings({ sound: !settings.sound })} aria-label={settings.sound ? '關閉音效' : '開啟音效'}>♫</button><button className="tool-button" onClick={() => { setPaused(true); }} aria-label="暫停">Ⅱ</button></div></header>
 
-      <section className={`enemy-panel${hurt ? ' enemy-panel--hurt' : ''}${attackFlash ? ' enemy-panel--flash' : ''}`}>
-        <div className="enemy-panel__copy"><div className="enemy-type-label">{battle.enemy.type === 'boss' ? <><i>✦</i> BOSS BATTLE</> : <>CHAPTER {battle.stage.chapter} · STAGE</>}</div><h1>{battle.enemy.name}</h1><p>{lastAction || battle.enemy.tagline}</p><div className="enemy-next"><span>NEXT</span><b>{actionText(battle)}</b></div>
-          <div className="enemy-health"><div><span>HP</span><b>{enemyHp}<i> / {battle.enemy.maxHp}</i></b></div><HealthBar value={enemyHp} max={battle.enemy.maxHp}/>{enemyShield > 0 && <small className="shield-label">✧ SHIELD {enemyShield}</small>}</div>
-        </div>
-        <div className="enemy-panel__figure"><span className="enemy-aura"/><EnemyArt kind={battle.enemy.kind} hurt={hurt}/><span className="enemy-art-tag">{battle.enemy.type === 'boss' ? 'BOSS' : 'FOE'}</span></div>
-        <div className="boss-damage-toast" aria-live="polite">{damageToast}</div>
-      </section>
-
-      <section className="party-section" aria-label="五位角色本回合數值">
-        <div className="party-heading"><span>水母小隊</span><i>每顆消除，都會替夥伴累積能量</i><span className="turn-counter">TURN {String(battle.turns + (busy ? 1 : 0)).padStart(2,'0')}</span></div>
-        <div className="character-row">
-          {CHARACTER_IDS.map((id) => {
-            const character = CHARACTERS[id];
-            const stats = displayCharacterStats[id];
-            return <div className={`character-card character-card--${character.color}${activeCharacter === id ? ' character-card--active' : ''}`} key={id}>
-              {floating[id] && <div className="floating-stats" key={floating[id]!.key}>{floating[id]!.text}</div>}
-              <div className="character-card__portrait"><CharacterArt id={id}/><span>{character.symbol}</span></div>
-              <b className="character-card__name">{id}</b>
-              <div className="character-card__mains">{character.mainStats.map((stat) => <span key={stat}>{statLabel(stat)}</span>)}</div>
-              <div className="character-card__power" aria-label={`${id} 本回合 ${totalPower(stats)} 點`}>+{totalPower(stats)}</div>
-            </div>;
-          })}
-        </div>
-      </section>
+      <Battlefield enemy={battle.enemy} hp={enemyHp} shield={enemyShield}
+        nextAction={actionText(battle)} turn={battle.turns} status={lastAction} cue={damageToast}
+        activeCharacter={activeCharacter} strike={strike} playerHurt={playerHurt}
+        paused={paused || hiddenPause} skipping={skipAnimation} />
 
       <StatsPanel stats={displayStats} power={displayPower} animate={Boolean(busy)} />
 

@@ -1,19 +1,15 @@
 import type { CharacterId, JellyColor } from '../game/types';
 import { CHARACTERS } from '../game/content/characters';
 
-const CHARACTER_COLORS: Record<CharacterId, string> = {
-  PNN: '#79c548', QCC: '#a981e9', REE: '#f36f65', KTT: '#efa13d', AII: '#b7d5e9',
-};
-
 export function CharacterArt({ id, className = '' }: { id: CharacterId; className?: string }) {
-  const accent = CHARACTER_COLORS[id];
-  const darker = id === 'AII' ? '#587d9b' : accent;
+  const accent = CHARACTERS[id].accent;
+  const darker = id === 'COO' ? '#967719' : id === 'KTT' ? '#287e91' : accent;
   const isWarm = id === 'REE' || id === 'KTT';
   return (
     <svg className={`character-art character-art--${id.toLowerCase()} ${className}`} viewBox="0 0 128 144" role="img" aria-label={`${id} 膠囊夥伴`}>
       <defs>
         <linearGradient id={`body-${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#fff" /><stop offset=".58" stopColor="#fffdf7" /><stop offset="1" stopColor={id === 'AII' ? '#deecf7' : `${accent}`} />
+          <stop stopColor="#fff" /><stop offset=".58" stopColor="#fffdf7" /><stop offset="1" stopColor={id === 'COO' ? '#fff0aa' : `${accent}`} />
         </linearGradient>
         <linearGradient id={`shell-${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor={`${accent}`} /><stop offset="1" stopColor={`${darker}`} />
@@ -24,9 +20,9 @@ export function CharacterArt({ id, className = '' }: { id: CharacterId; classNam
       {id === 'REE' && <path d="M39 31 Q30 17 44 9 Q44 20 55 14 Q54 27 64 27 Q55 35 39 31Z" fill="#ff9a48" stroke="#d64e50" strokeWidth="3" />}
       {id === 'KTT' && <path d="M34 36 L38 17 L50 26 L63 12 L73 27 L88 18 L93 38Z" fill={`${accent}`} stroke="#ad702f" strokeWidth="3" strokeLinejoin="round" />}
       {id === 'PNN' && <g transform="translate(61 21) rotate(-15)"><path d="M0 12 Q-20 -4 -17 -15 Q-2 -15 2 4 Q8 -14 20 -10 Q20 5 4 14Z" fill="#78be43" stroke="#488a32" strokeWidth="2.5" /><path d="M2 15v8" stroke="#488a32" strokeWidth="3" strokeLinecap="round" /></g>}
-      {id === 'AII' && <g fill="none" stroke="#577a96" strokeWidth="4"><ellipse cx="64" cy="33" rx="30" ry="8" transform="rotate(-9 64 33)"/><path d="M40 33v8m48-16-1 8" strokeLinecap="round"/></g>}
+      {id === 'COO' && <g fill="none" stroke="#a58528" strokeWidth="4"><ellipse cx="64" cy="33" rx="30" ry="8" transform="rotate(-9 64 33)"/><path d="M40 33v8m48-16-1 8" strokeLinecap="round"/></g>}
       {/* Little arms and boots give the pill mascot a toy-like stance. */}
-      <g filter={`url(#shadow-${id})`} stroke={id === 'AII' ? '#597d96' : `${darker}`} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+      <g filter={`url(#shadow-${id})`} stroke={id === 'COO' ? '#9c812b' : `${darker}`} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
         <path d="M34 84 Q15 83 15 98 Q17 106 31 101 L40 95" fill={`url(#body-${id})`} />
         <path d="M94 84 Q113 83 113 98 Q111 106 97 101 L88 95" fill={`url(#body-${id})`} />
         <path d="M48 117 L45 130 Q47 138 60 136 L64 127" fill={`url(#shell-${id})`} />
@@ -44,7 +40,7 @@ export function CharacterArt({ id, className = '' }: { id: CharacterId; classNam
         {id === 'QCC' && <path d="m0 -8 2.5 5.3 5.8.8-4.2 4.1 1 5.8L0 3.3-5.1 6l1-5.8-4.2-4.1 5.8-.8Z" fill="#ffda70" stroke="#9c72d6" strokeWidth="2" strokeLinejoin="round"/>}
         {id === 'REE' && <path d="M0 7 C-13 0 -3 -4 0 -11 C4 -4 13 0 0 7Z" fill="#ff9b43" stroke="#df5b58" strokeWidth="2"/>}
         {id === 'KTT' && <path d="M0 -8 8 0 0 8-8 0Z" fill="#ffd176" stroke="#bb7735" strokeWidth="2"/>}
-        {id === 'AII' && <><circle r="8" fill="#fff" stroke="#7899b3" strokeWidth="2.5"/><circle r="3" fill="#9dc7e3"/></>}
+        {id === 'COO' && <><circle r="8" fill="#fff6d5" stroke="#b18e29" strokeWidth="2.5"/><circle r="3" fill="#edc33f"/></>}
       </g>
     </svg>
   );
