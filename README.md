@@ -49,3 +49,5 @@ pnpm build
 ## 素材
 
 `reference/` 保留原始素材。遊戲盤面使用 `/public/assets/jellies/` 中的 5 張 WebP，包含 cyan（水藍）與 yellow（黃）水母。角色夥伴與 8 種敵人以專案內 SVG 繪製，沒有外部字型、圖片服務或 API 依賴。
+
+戰鬥畫面採簡潔戰場與無框能量帶；快速模式與音效位於暫停面板。完成首次有效交換後，操作教學會收起。Boss 蓄力時才顯示強招與打斷條件，SEED 僅於 debug 模式顯示。

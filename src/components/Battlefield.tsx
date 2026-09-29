@@ -16,11 +16,11 @@ export type StrikeState = {
 export const idleStrike: StrikeState = { phase: 'idle', fast: false, attackers: [], hit: null, chainWaves: 0 };
 
 const formation = [
-  { x: 26, y: 47, targetX: 65, targetY: 46 },
-  { x: 7, y: 29, targetX: 59, targetY: 29 },
-  { x: 9, y: 64, targetX: 60, targetY: 60 },
-  { x: 21, y: 17, targetX: 68, targetY: 19 },
-  { x: 24, y: 76, targetX: 68, targetY: 72 },
+  { x: 34, y: 64, targetX: 65, targetY: 46 },
+  { x: 8, y: 29, targetX: 59, targetY: 29 },
+  { x: 8, y: 64, targetX: 60, targetY: 60 },
+  { x: 25, y: 29, targetX: 68, targetY: 19 },
+  { x: 21, y: 64, targetX: 68, targetY: 72 },
 ];
 
 type Props = {
@@ -29,7 +29,7 @@ type Props = {
   shield: number;
   nextAction: string;
   bossCharge: BossChargeState | null;
-  turn: number;
+  stageTitle: string;
   status: string;
   cue: string;
   activeCharacter: CharacterId | null;
@@ -40,9 +40,10 @@ type Props = {
   playerHurt: boolean;
   paused: boolean;
   skipping: boolean;
+  presenting: boolean;
 };
 
-export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping }: Props) {
+export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, stageTitle, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping, presenting }: Props) {
   const fieldRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     fieldRef.current?.getAnimations({ subtree: true }).forEach((animation) => {
@@ -52,10 +53,21 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, s
   }, [paused, strike.phase]);
   const percent = Math.max(0, Math.min(100, hp / enemy.maxHp * 100));
   const hitting = strike.phase === 'impact' || strike.phase === 'recover';
-  return <section ref={fieldRef} className={`battlefield battlefield--${strike.phase} battlefield--chain-${strike.chainWaves}${bossCharge ? ' battlefield--charging' : ''}${strike.fast ? ' battlefield--fast' : ''}${playerHurt ? ' battlefield--player-hit' : ''}${paused ? ' battlefield--paused' : ''}${skipping ? ' battlefield--skip' : ''}`} aria-label="小隊戰場">
+  const strongHit = strike.chainWaves >= 3 || Boolean(strike.hit?.shieldBroken);
+  // One transient message, in priority order; the boss warning remains persistent.
+  const notice = !presenting || skipping || strike.hit ? ''
+    : strike.phase === 'boss-break' ? '強招打斷！'
+    : playerHurt ? status
+    : /^HP \+/.test(cue) ? `回復 ${cue}`
+    : /^SHIELD /.test(cue) ? cue.replace('SHIELD', '護盾')
+    : cue.startsWith('DAMAGE BOOST') ? '烈焰增幅已就緒'
+    : status.includes('發動') || status.startsWith('強招發動') ? status
+    : cue.startsWith('CASCADE ') ? `連鎖 ${cue.slice(8)} 波`
+    : cue.startsWith('連鎖 ') ? cue : '';
+  return <section ref={fieldRef} className={`battlefield battlefield--${strike.phase} battlefield--chain-${strike.chainWaves}${hitting ? ' battlefield--hit' : ''}${strongHit ? ' battlefield--strong' : ''}${bossCharge ? ' battlefield--charging' : ''}${strike.fast ? ' battlefield--fast' : ''}${playerHurt ? ' battlefield--player-hit' : ''}${paused ? ' battlefield--paused' : ''}${skipping ? ' battlefield--skip' : ''}`} aria-label="小隊戰場">
     <header className="battlefield-hud">
-      <div className="battlefield-title"><span>{enemy.type === 'boss' ? 'BOSS BATTLE' : 'JELLY SQUAD'}</span></div>
-      <div className="battlefield-vitals">
+      <div className="battlefield-title"><span>{stageTitle}</span></div>
+      <div className="battlefield-vitals"><h1 className="battlefield-name">{enemy.name}</h1>
         <div className="battlefield-hp-label"><span>敵人 HP</span><b>{hp}<small> / {enemy.maxHp}</small></b></div>
         <div className="battlefield-hp" role="progressbar" aria-label="敵人 HP" aria-valuemin={0} aria-valuemax={enemy.maxHp} aria-valuenow={hp}>
           <span className="battlefield-hp-trail" style={{ width: `${percent}%` }} />
@@ -66,14 +78,13 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, s
     </header>
 
     <div className="battlefield-scene">
-      <div className="battlefield-horizon" aria-hidden="true" />
+
       <div className="battlefield-floor" aria-hidden="true" />
-      <span className="battlefield-side" aria-hidden="true">012S SQUAD</span>
-      <span className="battlefield-cue" role="status">{cue}</span>
+
       <div className="battlefield-enemy">
         <div className="battlefield-enemy-shadow" />
-        <EnemyArt kind={enemy.kind} hurt={hitting} />
-        <h1 className="battlefield-enemy-name">{enemy.name}</h1>
+        <EnemyArt kind={enemy.kind} />
+
       </div>
 
       {CHARACTER_IDS.map((id, index) => {
@@ -98,20 +109,16 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, turn, s
         </button>;
       })}
 
-      {strike.hit && <div className="battlefield-impact" aria-hidden="true"><i /><i /><i /><i /><b>✦</b></div>}
-      {strike.hit && <div className="battlefield-damage" role="status">
-        <span>{strike.hit.shieldBroken ? '破盾！' : 'HIT!'}</span>
+      {strike.hit && !skipping && <div className="battlefield-impact" aria-hidden="true"><i /><i />{strongHit && <><i /><i /></>}<b>✦</b></div>}
+      {strike.hit && !skipping ? <div className="battlefield-damage" role="status" aria-label={`造成 ${strike.hit.damage} 傷害${strike.hit.shieldBroken ? '，護盾擊破' : ''}`}>
+        {(strike.hit.shieldBroken || strongHit) && <span>{strike.hit.shieldBroken ? '破盾！' : '連鎖合擊'}</span>}
         <strong>{strike.hit.damage}</strong>
         {strike.hit.shieldDamage > 0 && <small>護盾 −{strike.hit.shieldDamage}</small>}
-      </div>}
-      {playerHurt && <span className="battlefield-player-hit" aria-hidden="true">小隊受擊</span>}
+      </div> : notice ? <span key={notice} className={`battlefield-notice${playerHurt ? ' battlefield-notice--hurt' : ''}`} role="status">{notice}</span> : null}
     </div>
 
-    <footer className={`battlefield-caption${bossCharge ? ' battlefield-caption--charging' : ''}`}>
-      <span className="battlefield-status" role="status">{status || '消除水母，集結小隊能量'}</span>
-      <span className="battlefield-next">NEXT <b>{bossCharge ? `${bossCharge.title} · ${bossCharge.effectText}` : nextAction}</b></span>
-      {bossCharge && <span className="battlefield-charge-warning" role="status">⚡ 下次有效交換達成 2 波消除可打斷</span>}
-      <span className="battlefield-turn">T{String(turn).padStart(2, '0')}</span>
-    </footer>
+    <span className="sr-only">下一招：{nextAction}</span>
+    {bossCharge && <div className="battlefield-charge-notice" role="status"><b>⚡ {bossCharge.title} · {bossCharge.effectText}</b><span>下次有效交換達成 2 波消除可打斷</span></div>}
+
   </section>;
 }
