@@ -53,7 +53,6 @@ function actionText(battle: BattleState): string {
     case 'blocker': return `${prefix}障礙 +${action.amount}`;
     case 'fog': return `${prefix}迷霧 ${action.amount} 格`;
     case 'shield': return `${prefix}護盾 +${action.amount}`;
-    case 'darken': return `${prefix}陰影`;
     case 'slime': return `${prefix}黏液 +${action.amount}`;
     case 'stone': return `${prefix}石化 +${action.amount}`;
   }
@@ -581,7 +580,7 @@ export default function App() {
         </section>
       </div>}
 
-      <section className={`board-section${battle.darkTurns > 0 ? ' board-section--dim' : ''}${busy ? ' board-section--busy' : ''}`} aria-label="6 乘 6 水母盤面">
+      <section className={`board-section${busy ? ' board-section--busy' : ''}`} aria-label="6 乘 6 水母盤面">
         {(!hasLearnedSwap || selected) && <div className="board-instruction" role="status">{selected ? '再選一顆相鄰水母' : '滑動或點選兩格，連成 3 個以上'}</div>}
         <div ref={boardRef} className={`match-board${popping ? ' match-board--popping' : ''}${settings.fast ? ' match-board--fast' : ''}`} role="group" aria-label="水母消除盤面：滑動或點選兩格交換；方向鍵移動，Shift 加方向鍵交換，Escape 取消選取" aria-busy={busy}>
           {displayBoard.flatMap((row, rowIndex) => row.map((tile, colIndex) => {
@@ -614,7 +613,7 @@ export default function App() {
                 if (event.detail > 0 && suppressClickRef.current) { suppressClickRef.current = false; return; }
                 selectTile(cell);
               }} onKeyDown={(e) => handleCellKey(e, cell)} data-testid={`cell-${rowIndex}-${colIndex}`}>
-              {tile && <span className="tile-motion" data-tile-id={tile.id}><JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits} dimmed={battle.darkTurns > 0}/></span>}
+              {tile && <span className="tile-motion" data-tile-id={tile.id}><JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits}/></span>}
             </button>;
           }))}
         </div>

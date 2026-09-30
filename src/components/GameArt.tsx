@@ -47,11 +47,11 @@ export function CharacterArt({ id, className = '' }: { id: CharacterId; classNam
   );
 }
 
-export function JellyTile({ color, selected, fog, lockHits, dimmed }: {
-  color: JellyColor; selected: boolean; fog?: number; lockHits?: number; dimmed?: boolean;
+export function JellyTile({ color, selected, fog, lockHits }: {
+  color: JellyColor; selected: boolean; fog?: number; lockHits?: number;
 }) {
   return (
-    <span className={`jelly-art jelly-art--${color}${selected ? ' is-selected' : ''}${dimmed ? ' is-dimmed' : ''}`}>
+    <span className={`jelly-art jelly-art--${color}${selected ? ' is-selected' : ''}`}>
       <img src={`${import.meta.env.BASE_URL}assets/jellies/${color}.webp`} alt="" draggable="false" />
       {fog ? <span className="jelly-fog" aria-hidden="true"><i /><i /></span> : null}
       {lockHits ? <span className={`jelly-lock${lockHits > 1 ? ' jelly-lock--stone' : ''}`} aria-hidden="true">{lockHits > 1 ? '✦' : '⌑'}</span> : null}

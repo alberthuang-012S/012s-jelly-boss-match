@@ -35,6 +35,5 @@ export function createBattle(stage: StageConfig, random: RandomSource): BattleSt
     highestTurnDamage: 0,
     highestCascade: 0,
     status: 'playing',
-    darkTurns: 0,
   };
 }

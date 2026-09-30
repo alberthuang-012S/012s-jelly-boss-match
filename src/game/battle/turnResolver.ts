@@ -28,17 +28,15 @@ function actionMessage(action: EnemyAction): string {
     case 'blocker': return `障礙 +${action.amount}`;
     case 'fog': return '迷霧來襲';
     case 'shield': return `護盾 +${action.amount}`;
-    case 'darken': return '陰影覆蓋';
     case 'slime': return `黏液格 +${action.amount}`;
     case 'stone': return `石化格 +${action.amount}`;
   }
 }
 
-function resolveActionEffects(action: EnemyAction, board: Board, playerHp: number, enemyShield: number, darkTurns: number, random: RandomSource) {
+function resolveActionEffects(action: EnemyAction, board: Board, playerHp: number, enemyShield: number, random: RandomSource) {
   const events: BattleEvent[] = [];
   let nextPlayerHp = playerHp;
   let nextEnemyShield = enemyShield;
-  let nextDarkTurns = darkTurns;
   switch (action.type) {
     case 'attack':
       nextPlayerHp = Math.max(0, playerHp - action.amount);
@@ -73,12 +71,8 @@ function resolveActionEffects(action: EnemyAction, board: Board, playerHp: numbe
       nextEnemyShield += action.amount;
       events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: `護盾 +${action.amount}` });
       break;
-    case 'darken':
-      nextDarkTurns = Math.max(nextDarkTurns, action.turns);
-      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
-      break;
   }
-  return { playerHp: nextPlayerHp, enemyShield: nextEnemyShield, darkTurns: nextDarkTurns, events };
+  return { playerHp: nextPlayerHp, enemyShield: nextEnemyShield, events };
 }
 
 function cellsAround(cells: readonly Cell[], rows: number, cols: number): Cell[] {
@@ -181,7 +175,6 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
   events.push({ type: 'ENEMY_DAMAGE', damage, hpDamage: enemyHpDamage, shieldDamage: enemyShieldDamage, enemyHp, enemyShield });
 
   let playerHp = battle.playerHp;
-  let darkTurns = Math.max(0, battle.darkTurns - 1);
   let status: BattleState['status'] = battle.status;
   let enemyShieldAfterAction = enemyShield;
   let bossCharge: BossChargeState | null = battle.bossCharge;
@@ -208,10 +201,9 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
       } else {
         events.push({ type: 'BOSS_SPECIAL', charge: bossCharge });
         for (const action of bossCharge.actions) {
-          const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, darkTurns, random);
+          const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, random);
           playerHp = result.playerHp;
           enemyShieldAfterAction = result.enemyShield;
-          darkTurns = result.darkTurns;
           events.push(...result.events);
         }
         bossCharge = null;
@@ -226,10 +218,9 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
       const action = pattern[(battle.turns) % pattern.length]!;
       const actionName = battle.enemy.actionNames?.[battle.turns % pattern.length];
       events.push({ type: 'ENEMY_ACTION', action, message: `${actionName ? `${actionName} · ` : ''}${actionMessage(action)}` });
-      const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, darkTurns, random);
+      const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, random);
       playerHp = result.playerHp;
       enemyShieldAfterAction = result.enemyShield;
-      darkTurns = result.darkTurns;
       events.push(...result.events);
       if (battle.enemy.bossSpecial) bossSpecialCooldown = Math.max(0, bossSpecialCooldown - 1);
     }
@@ -263,7 +254,6 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
     highestTurnDamage: Math.max(battle.highestTurnDamage, enemyHpDamage),
     highestCascade: Math.max(battle.highestCascade, cascade),
     status,
-    darkTurns,
   };
   return { accepted: true, battle: nextBattle, events };
 }

@@ -30,7 +30,6 @@ export type EnemyAction =
   | { type: 'blocker'; amount: number }
   | { type: 'fog'; amount: number }
   | { type: 'shield'; amount: number }
-  | { type: 'darken'; turns: number }
   | { type: 'slime'; amount: number }
   | { type: 'stone'; amount: number };
 
@@ -108,7 +107,6 @@ export type BattleState = {
   highestTurnDamage: number;
   highestCascade: number;
   status: GameStatus;
-  darkTurns: number;
 };
 
 export type Gain = { stat: StatKey; amount: number };
