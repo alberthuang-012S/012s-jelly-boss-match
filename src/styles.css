@@ -16,8 +16,8 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; min-height: 100%; background: #f5f7fb; }
-body { min-width: 320px; min-height: 100vh; margin: 0; background: #f5f7fb; }
+html { min-width: 0; min-height: 100%; background: #f5f7fb; }
+body { min-width: 0; min-height: 100vh; margin: 0; background: #f5f7fb; }
 button, input { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 3px solid #8e7fcb; outline-offset: 3px; }
@@ -242,17 +242,8 @@ button:disabled { cursor: not-allowed; }
   .match-board--popping .board-cell--match::before { animation: none; }
 }
 
-/* Reserve space for the shared battlefield before sizing the puzzle. */
-.battle-shell { --board-budget: 450px; }
-.battle-shell .match-board, .battle-shell .board-footer { width: min(100%,425px,max(240px,calc(100dvh - var(--board-budget)))); }
-@media (max-width: 430px) { .battle-shell { --board-budget: 410px; } }
-@media (min-width: 700px) and (min-height: 801px) { .battle-shell { --board-budget: 520px; } }
 @media (min-width: 700px) and (max-height: 680px) {
   .battle-shell { height: 100dvh; min-height: 100dvh; margin-top: 0; gap: 4px; padding-top: 4px; padding-bottom: 4px; }
-  .battlefield .battlefield-scene { height: 110px; }
-}
-@media (min-width: 700px) and (min-height: 681px) and (max-height: 1000px) {
-  .battle-shell { --board-budget: 590px; }
 }
 
 .stats-panel__head .ree-boost-ready { grid-column: 1 / -1; color: #dc7351; font: 900 7px 'Nunito'; white-space: nowrap; }
@@ -281,7 +272,7 @@ button:disabled { cursor: not-allowed; }
 .battle-shell .stats-panel__head strong { font-size: 26px; color: #7665a5; line-height: 1.2; }
 .battle-shell .stats-panel__head .chain-multiplier { font-size: 9px; color: #a28757; }
 .battle-shell .stats-panel__head .ree-boost-ready { white-space: normal; font-size: 8px; }
-.battle-shell .stats-grid { gap: 2px; }
+.battle-shell .stats-grid { min-width: 0; gap: 2px; }
 .battle-shell .stat-chip { min-height: 32px; padding: 0; border: 0; background: none; border-radius: 0; }
 .battle-shell .stat-chip span { font-size: 7px; color: #8d95a6; }
 .battle-shell .stat-chip b { font-size: 12px; margin-top: 5px; color: #58657c; font-variant-numeric: tabular-nums; }
@@ -306,6 +297,47 @@ button:disabled { cursor: not-allowed; }
   .battle-shell .stat-chip span { font-size: 6px; }
   .battle-shell .stat-chip b { font-size: 10px; }
 }
-/* Reclaim the space removed by the old captions and controls. */
-@media (min-width: 700px) and (max-height: 800px) { .battle-shell { --board-budget: 400px; } }
-@media (max-width: 430px) { .battle-shell { --board-budget: 390px; } }
+
+/* Size the puzzle from measured remaining space rather than breakpoint budgets. */
+.battle-shell { height: auto; min-height: 0; margin: 12px auto; gap: 10px; padding: 12px 16px; }
+.battle-shell .battle-footer { margin-top: 0; min-height: 28px; }
+.battle-shell .match-board { width: var(--board-size, min(100%,425px)); min-width: 0; }
+.battle-shell .stats-panel { gap: 10px; }
+.battle-shell .stat-chip span { font-size: 9px; color: #737f95; }
+.battle-shell .stat-chip b { font-size: 14px; margin-top: 4px; }
+.battle-shell .stats-panel__head > span { font-size: 11px; color: #758198; }
+.battle-shell .stats-panel__head strong { font-size: 28px; }
+.battle-shell .battle-stage-id { font-size: 12px; }
+.battle-shell .battle-exit { min-height: 44px; }
+.battle-shell .pause-trigger { width: 44px; height: 44px; font-size: 15px; }
+.pause-card:focus { outline: none; }
+@media (max-width: 430px) {
+  .battle-shell { margin: 0 auto; padding: 8px 10px max(8px,env(safe-area-inset-bottom)); gap: 7px; }
+  .battle-shell .stats-panel { gap: 7px; }
+  .battle-shell .stats-panel__head { flex-basis: 66px; width: 66px; }
+  .battle-shell .stat-chip span { font-size: 8px; }
+  .battle-shell .stat-chip b { font-size: 12px; }
+  .battle-shell .stats-panel__head > span { font-size: 10px; }
+}
+/* Keep targets still when contextual guidance appears. */
+.battle-shell .board-section { position: relative; padding-top: 24px; }
+.board-instruction { position: absolute; top: 2px; left: 0; right: 0; padding: 0; min-height: 16px; font-size: 10px; line-height: 16px; pointer-events: none; }
+.battle-shell .battle-footer { justify-content: flex-end; gap: 8px; min-height: 36px; }
+.battle-footer-actions { display: flex; align-items: center; justify-content: end; gap: 8px; min-height: 36px; }
+.battle-footer .skip-button { position: static; min-height: 36px; padding: 6px 11px; border: 0; background: #eeeaf6; color: #7b6e9b; font: 700 11px system-ui,sans-serif; white-space: nowrap; }
+.battle-footer .skip-button:disabled { opacity: .65; cursor: default; }
+.battle-shell .player-health { width: 174px; flex: 0 1 174px; gap: 7px; }
+.battle-shell .player-heart { font-size: 18px; }
+.battle-shell .player-health b { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; font-size: 10px; color: #758397; white-space: nowrap; }
+.battle-shell .player-health b i { padding: 0; font-size: 10px; color: #61778b; }
+.battle-shell .player-health .health-track { height: 6px; }
+.battle-footer--low-hp .player-heart, .battle-footer--low-hp .player-health b i { color: #c06f7e; }
+.battle-footer--low-hp .health-track--mint span { background: #dc8a98; }
+.battlefield .battlefield-skill-badge { position: absolute; right: -3px; top: -3px; display: grid; place-items: center; width: 19px; height: 19px; border: 2px solid #fff; border-radius: 50%; background: var(--accent); color: #fff; box-shadow: 0 2px 6px #42546f25; font: 900 11px/1 system-ui,sans-serif; pointer-events: none; }
+.battlefield .battlefield-hero--charged:not(.battlefield-hero--energized) .battlefield-hero-art { filter: none; }
+.battlefield--rush .battlefield-skill-badge, .battlefield--impact .battlefield-skill-badge { opacity: 0; }
+@media (max-width: 350px) {
+  .battle-shell .stats-panel { gap: 4px; }
+  .battle-shell .stats-panel__head { width: 58px; flex-basis: 58px; }
+  .battle-shell .stat-chip span { font-size: 7px; letter-spacing: 0; }
+}

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CharacterArt, EnemyArt, JellyTile } from './components/GameArt';
 import { Battlefield, idleStrike, type StrikeState } from './components/Battlefield';
+import { useBoardSize } from './components/useBoardSize';
 import { CHARACTERS } from './game/content/characters';
 import { characterForColor } from './game/content/characters';
 import { ENEMIES } from './game/content/enemies';
@@ -55,11 +56,6 @@ function actionText(battle: BattleState): string {
   }
 }
 
-function HealthBar({ value, max, tint = 'pink' }: { value: number; max: number; tint?: string }) {
-  const percent = Math.max(0, Math.min(100, (value / max) * 100));
-  return <div className={`health-track health-track--${tint}`} role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={tint === 'mint' ? '玩家 HP' : '敵人 HP'}><span style={{ width: `${percent}%` }} /></div>;
-}
-
 function StatsPanel({ stats, power, chainMultiplier, reeBoostPending = false, animate = false }: { stats: TurnStats; power: number; chainMultiplier: number; reeBoostPending?: boolean; animate?: boolean }) {
   return <section className="stats-panel" aria-label="本回合九項屬性">
     <div className="stats-panel__head"><span>本回合能量</span><strong className="power-number">{power}</strong>{chainMultiplier > 1 && <em className="chain-multiplier">×{chainMultiplier.toFixed(2)}</em>}{reeBoostPending && <em className="ree-boost-ready">REE 增幅 ×1.25 待命</em>}</div>
@@ -111,6 +107,9 @@ export default function App() {
   const busyRef = useRef(false);
   const runRef = useRef(0);
   const boardRef = useRef<HTMLDivElement>(null);
+  const battleShellRef = useRef<HTMLElement>(null);
+  const pauseDialogRef = useRef<HTMLDivElement>(null);
+  const pauseButtonRef = useRef<HTMLButtonElement>(null);
   const skillDialogRef = useRef<HTMLElement>(null);
   const skillFocusReturnRef = useRef<HTMLElement | null>(null);
   const positionsRef = useRef(new Map<string, { x: number; y: number }>());
@@ -127,6 +126,16 @@ export default function App() {
   const pulseTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const makeSound = useMemo(makeCue, []);
   const isDebug = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
+
+  useBoardSize(battleShellRef, screen === 'battle');
+
+  useEffect(() => {
+    if (paused || hiddenPause) {
+      const previous = document.activeElement;
+      pauseDialogRef.current?.focus();
+      return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+    }
+  }, [paused, hiddenPause]);
 
   pauseRef.current = paused;
   hiddenRef.current = hiddenPause;
@@ -560,10 +569,10 @@ export default function App() {
 
     {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','cyan','yellow','purple','red','cyan','yellow','green','cyan','yellow','green','purple','red','yellow','green','purple','red','cyan','purple','red','cyan','yellow','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
 
-    {screen === 'battle' && battle && <main className="battle-shell">
-      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>第 {battle.turns} 回合</span></div><button className="tool-button pause-trigger" onClick={() => setPaused(true)} aria-label="暫停與設定">Ⅱ</button></header>
+    {screen === 'battle' && battle && <main ref={battleShellRef} className="battle-shell">
+      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>第 {battle.turns} 回合</span></div><button ref={pauseButtonRef} className="tool-button pause-trigger" onClick={() => setPaused(true)} aria-label="暫停與設定">Ⅱ</button></header>
 
-      <Battlefield enemy={battle.enemy} hp={enemyHp} shield={enemyShield}
+      <Battlefield enemy={battle.enemy} hp={enemyHp} playerHp={playerHp} shield={enemyShield}
         stageTitle={battle.stage.title} nextAction={actionText(battle)} bossCharge={displayBossCharge} status={lastAction} cue={damageToast}
         activeCharacter={activeCharacter} charges={displayCharges} skillsDisabled={busy || paused || hiddenPause || battle.status !== 'playing'} onSkillSelect={openSkillPanel} strike={strike} playerHurt={playerHurt}
         paused={paused || hiddenPause} skipping={skipAnimation} presenting={busy} />
@@ -623,12 +632,18 @@ export default function App() {
 
       </section>
 
-      <footer className="battle-footer"><div className="player-health"><span className="player-heart">♥</span><div><b>小隊 HP <i>{playerHp} / 100</i></b><HealthBar value={playerHp} max={100} tint="mint"/></div></div>{isDebug && <span className="seed-note">SEED {seedLabel.toUpperCase()}</span>}{isDebug && <button className="debug-toggle" onClick={() => setShowDebug((v) => !v)}>DEBUG</button>}</footer>
+      <footer className="battle-footer"><div className="battle-footer-actions">{busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} disabled={skipAnimation || paused || hiddenPause} aria-label="略過目前動畫">{skipAnimation ? '結算中…' : '略過動畫 ›'}</button>}{isDebug && !busy && <span className="seed-note">SEED {seedLabel.toUpperCase()}</span>}{isDebug && <button className="debug-toggle" onClick={() => setShowDebug((v) => !v)}>DEBUG</button>}</div></footer>
 
       {isDebug && showDebug && <section className="debug-panel"><div className="debug-panel__head"><b>DEBUG PANEL</b><span>SEED {seedLabel}</span><button onClick={() => setShowDebug(false)}>收起 ×</button></div><div className="debug-seed"><input value={debugSeed} onChange={(e) => setDebugSeed(e.target.value)} aria-label="輸入 RNG Seed"/><button onClick={() => startStage(displayedStageIndexRef.current, debugSeed)}>套用 Seed</button><button onClick={() => pushLog(`RNG seed ${seedLabel}`)}>顯示 Seed</button></div><div className="debug-actions"><button onClick={debugWin}>Win Stage</button><button onClick={() => debugNudge('enemy')}>Boss HP −50</button><button onClick={() => debugNudge('player')}>Player HP −20</button><button onClick={() => startStage(displayedStageIndexRef.current, seedLabel)}>Reset Stage</button><button onClick={() => { setProgress(unlockAll()); }}>Unlock All Stages</button><button onClick={debugCascade}>Force Cascade Board</button>{CHARACTER_IDS.map((id) => <button key={id} onClick={() => debugResolution(CHARACTERS[id].color)}>Force {id} Match</button>)}</div><div className="debug-log"><b>Last Turn Stats · {totalPower(battle.turnStats)} TOTAL</b>{STAT_KEYS.map((s) => <span key={s}>{s} {battle.turnStats[s]}</span>)}<details><summary>Event Log（最近 24 則）</summary>{eventLog.slice(-24).map((entry,i)=><p key={`${i}-${entry}`}>{entry}</p>)}</details></div></section>}
 
-      {(paused || hiddenPause) && <div className="pause-overlay" role="dialog" aria-modal="true"><div className="pause-card"><div className="pause-icon">Ⅱ</div><h2>{hiddenPause ? '先休息一下。' : '暫停中'}</h2><p>調整好節奏，再繼續冒險。</p><div className="pause-settings"><button type="button" aria-pressed={settings.fast} onClick={() => updateSettings({ fast: !settings.fast })}><span>快速模式</span><b>{settings.fast ? '開啟' : '關閉'}</b></button><button type="button" aria-pressed={settings.sound} onClick={() => updateSettings({ sound: !settings.sound })}><span>音效</span><b>{settings.sound ? '開啟' : '關閉'}</b></button></div><button className="primary-button" onClick={() => { setPaused(false); setHiddenPause(false); }}>繼續冒險 <span>→</span></button><button className="pause-exit" onClick={leaveBattle}>返回關卡</button></div></div>}
-      {busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} aria-label="略過目前動畫">SKIP ↗</button>}
+      {(paused || hiddenPause) && <div className="pause-overlay"><div ref={pauseDialogRef} className="pause-card" role="dialog" aria-modal="true" aria-labelledby="pause-heading" tabIndex={-1} onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.preventDefault(); setPaused(false); setHiddenPause(false); pauseButtonRef.current?.focus(); return; }
+        if (event.key !== 'Tab') return;
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+        const first = controls[0]; const last = controls[controls.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }}><div className="pause-icon">Ⅱ</div><h2 id="pause-heading">{hiddenPause ? '先休息一下。' : '暫停中'}</h2><p>調整好節奏，再繼續冒險。</p><div className="pause-settings"><button type="button" aria-pressed={settings.fast} onClick={() => updateSettings({ fast: !settings.fast })}><span>快速模式</span><b>{settings.fast ? '開啟' : '關閉'}</b></button><button type="button" aria-pressed={settings.sound} onClick={() => updateSettings({ sound: !settings.sound })}><span>音效</span><b>{settings.sound ? '開啟' : '關閉'}</b></button></div><button className="primary-button" onClick={() => { setPaused(false); setHiddenPause(false); }}>繼續冒險 <span>→</span></button><button className="pause-exit" onClick={leaveBattle}>返回關卡</button></div></div>}
     </main>}
 
     {screen === 'result' && battle && <main className={`result-screen result-screen--${battle.status}`}>

@@ -123,6 +123,29 @@
 .battlefield-enemy { left: 64%; top: 18%; width: 35%; height: 74%; }
 .battlefield-hero-art { display: block; }
 .battlefield-hero-name { font-size: 8px; color: #748298; }
+.battlefield-hud { gap: 24px; }
+.battlefield-vitals { width: 44%; min-width: 0; }
+.battlefield-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 18px; }
+.battlefield-team-name { text-align: left; }
+.battlefield-hp-label { font-size: 10px; }
+.battlefield-hp { height: 6px; }
+.battlefield-team .battlefield-hp { background: #dce9e4; }
+.battlefield-team .battlefield-hp-fill { background: linear-gradient(90deg,#9dd5b7,#69b99e); }
+.battlefield-team--low .battlefield-hp-fill { background: #dc8a98; }
+.battlefield-team--low .battlefield-hp-label, .battlefield-team--low .battlefield-hp-label b { color: #b75c71; }
+/* Reserve separate space for feet, charge rings, and readable names in both rows. */
+.battlefield-scene { height: 180px; }
+.battlefield-hero { width: 48px; height: 50px; }
+.battlefield-hero-name { top: calc(100% + 10px); z-index: 2; padding: 1px 5px; border-radius: 5px; background: #f5f7fae8; color: #57677e; font-size: 9px; line-height: 12px; white-space: nowrap; pointer-events: none; }
+.battlefield-charge-ring { bottom: -4px; pointer-events: none; }
+.battlefield-enemy { left: 65%; top: 15%; width: 32%; height: 74%; }
+.battlefield--rush .battlefield-hero-name, .battlefield--impact .battlefield-hero-name { opacity: 0; }
+@media (max-width: 430px), (max-height: 720px) {
+  .battlefield-hud { padding: 12px 12px 0; gap: 18px; }
+  .battlefield-scene { height: 166px; }
+  .battlefield-hero { width: 40px; height: 44px; }
+  .battlefield-name { font-size: 12px; }
+}
 .battlefield-charge-notice { display: grid; gap: 4px; margin: 0 12px 10px; padding: 8px 10px; border-radius: 10px; color: #80659d; background: #e9e1f480; font-size: 10px; text-align: center; }
 .battlefield-charge-notice span { font-size: 9px; }
 
@@ -142,3 +165,7 @@
 @keyframes battlefield-tap { 0%,100% { transform: translateX(0); } 30% { transform: translateX(3px) scaleX(.98); } }
 @keyframes battlefield-heavy-hit { 0%,100% { transform: translateX(0) rotate(0); } 24% { transform: translateX(7px) rotate(5deg); } 56% { transform: translateX(-2px) rotate(-1deg); } }
 @keyframes battlefield-notice-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .battlefield--rush .battlefield-hero-name,
+  .battlefield--impact .battlefield-hero-name { opacity: 1; }
+}

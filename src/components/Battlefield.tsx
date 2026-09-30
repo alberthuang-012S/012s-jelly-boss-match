@@ -16,16 +16,17 @@ export type StrikeState = {
 export const idleStrike: StrikeState = { phase: 'idle', fast: false, attackers: [], hit: null, chainWaves: 0 };
 
 const formation = [
-  { x: 34, y: 64, targetX: 65, targetY: 46 },
-  { x: 8, y: 29, targetX: 59, targetY: 29 },
-  { x: 8, y: 64, targetX: 60, targetY: 60 },
-  { x: 25, y: 29, targetX: 68, targetY: 19 },
-  { x: 21, y: 64, targetX: 68, targetY: 72 },
+  { x: 40, y: 69, targetX: 65, targetY: 46 },
+  { x: 14, y: 24, targetX: 59, targetY: 29 },
+  { x: 6, y: 69, targetX: 60, targetY: 60 },
+  { x: 33, y: 24, targetX: 68, targetY: 19 },
+  { x: 23, y: 69, targetX: 68, targetY: 72 },
 ];
 
 type Props = {
   enemy: EnemyConfig;
   hp: number;
+  playerHp: number;
   shield: number;
   nextAction: string;
   bossCharge: BossChargeState | null;
@@ -43,7 +44,7 @@ type Props = {
   presenting: boolean;
 };
 
-export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, stageTitle, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping, presenting }: Props) {
+export function Battlefield({ enemy, hp, playerHp, shield, nextAction, bossCharge, stageTitle, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping, presenting }: Props) {
   const fieldRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     fieldRef.current?.getAnimations({ subtree: true }).forEach((animation) => {
@@ -66,7 +67,13 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, stageTi
     : cue.startsWith('連鎖 ') ? cue : '';
   return <section ref={fieldRef} className={`battlefield battlefield--${strike.phase} battlefield--chain-${strike.chainWaves}${hitting ? ' battlefield--hit' : ''}${strongHit ? ' battlefield--strong' : ''}${bossCharge ? ' battlefield--charging' : ''}${strike.fast ? ' battlefield--fast' : ''}${playerHurt ? ' battlefield--player-hit' : ''}${paused ? ' battlefield--paused' : ''}${skipping ? ' battlefield--skip' : ''}`} aria-label="小隊戰場">
     <header className="battlefield-hud">
-      <div className="battlefield-title"><span>{stageTitle}</span></div>
+      <div className={`battlefield-vitals battlefield-team${playerHp <= 25 ? ' battlefield-team--low' : ''}`}>
+        <div className="battlefield-name battlefield-team-name" title={stageTitle}>{stageTitle}</div>
+        <div className="battlefield-hp-label"><span>♥ 小隊 HP</span><b>{playerHp}<small> / 100</small></b></div>
+        <div className="battlefield-hp" role="progressbar" aria-label="玩家 HP" aria-valuemin={0} aria-valuemax={100} aria-valuenow={playerHp}>
+          <span className="battlefield-hp-fill" style={{ width: `${Math.max(0, Math.min(100, playerHp))}%` }} />
+        </div>
+      </div>
       <div className="battlefield-vitals"><h1 className="battlefield-name">{enemy.name}</h1>
         <div className="battlefield-hp-label"><span>敵人 HP</span><b>{hp}<small> / {enemy.maxHp}</small></b></div>
         <div className="battlefield-hp" role="progressbar" aria-label="敵人 HP" aria-valuemin={0} aria-valuemax={enemy.maxHp} aria-valuenow={hp}>
@@ -100,12 +107,13 @@ export function Battlefield({ enemy, hp, shield, nextAction, bossCharge, stageTi
           '--charge-progress': `${chargePercent}%`,
           zIndex: 3 + index,
         } as CSSProperties;
-        return <button key={id} type="button" style={style} disabled={skillsDisabled} onClick={() => onSkillSelect(id)} aria-label={`${id} ${skill.name}，充能 ${charge} / ${skill.chargeCost}，Enter 或 Space 開啟技能`} className={`battlefield-hero${attacking ? ' battlefield-hero--attacking' : ''}${activeCharacter === id ? ' battlefield-hero--energized' : ''}${chargePercent >= 100 ? ' battlefield-hero--charged' : ''}`}>
+        return <button key={id} type="button" style={style} disabled={skillsDisabled} onClick={() => onSkillSelect(id)} aria-label={`${id} ${skill.name}，充能 ${charge} / ${skill.chargeCost}，${chargePercent >= 100 ? '能量已滿，' : ''}Enter 或 Space 開啟技能`} className={`battlefield-hero${attacking ? ' battlefield-hero--attacking' : ''}${activeCharacter === id ? ' battlefield-hero--energized' : ''}${chargePercent >= 100 ? ' battlefield-hero--charged' : ''}`}>
           <span className="battlefield-hero-shadow" aria-hidden="true" />
           <span className="battlefield-trail" aria-hidden="true" />
           <span className="battlefield-hero-art"><CharacterArt id={id} /></span>
           <span className="battlefield-hero-name">{id}</span>
-          <span className="battlefield-charge-ring" aria-hidden="true"><i>{chargePercent >= 100 ? skill.icon : ''}</i></span>
+          <span className="battlefield-charge-ring" aria-hidden="true" />
+          {chargePercent >= 100 && <span className="battlefield-skill-badge" aria-hidden="true">{skill.icon}</span>}
         </button>;
       })}
 
