@@ -72,3 +72,17 @@ export function loadSettings(storage?: StorageLike): GameSettings {
 export function saveSettings(settings: GameSettings, storage?: StorageLike): void {
   try { browserStorage(storage)?.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* settings remain in memory */ }
 }
+
+const TEAM_NAME_KEY = 'jelly-boss-match.team-name.v1';
+export const DEFAULT_TEAM_NAME = '水母小隊';
+
+export function loadTeamName(storage?: StorageLike): string {
+  try { return browserStorage(storage)?.getItem(TEAM_NAME_KEY)?.trim().slice(0, 12) || DEFAULT_TEAM_NAME; }
+  catch { return DEFAULT_TEAM_NAME; }
+}
+
+export function saveTeamName(name: string, storage?: StorageLike): string {
+  const next = name.trim().slice(0, 12) || DEFAULT_TEAM_NAME;
+  try { browserStorage(storage)?.setItem(TEAM_NAME_KEY, next); } catch { /* name remains in memory */ }
+  return next;
+}

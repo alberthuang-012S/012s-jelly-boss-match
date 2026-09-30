@@ -15,7 +15,7 @@ import { emptyTurnStats } from './game/stats/statGenerator';
 import { CHARACTER_IDS, STAT_KEYS, type BattleEvent, type BattleState, type BossChargeState, type CharacterId, type CharacterCharges, type Cell, type JellyColor, type StatKey, type TurnStats } from './game/types';
 import { CHARACTER_SKILLS } from './game/content/skills';
 import { emptyCharacterCharges, skillUnavailableReason, useCharacterSkill } from './game/skills/characterSkills';
-import { loadProgress, loadSettings, saveSettings, saveStageClear, unlockAll } from './storage/progress';
+import { loadProgress, loadSettings, saveSettings, saveStageClear, unlockAll, loadTeamName, saveTeamName } from './storage/progress';
 import type { GameSettings } from './storage/progress';
 
 type Screen = 'home' | 'select' | 'battle' | 'result' | 'help';
@@ -73,6 +73,7 @@ export default function App() {
   const [hasLearnedSwap, setHasLearnedSwap] = useState(() => { try { return localStorage.getItem('jelly-swap-learned') === '1'; } catch { return false; } });
   const [screen, setScreen] = useState<Screen>('home');
   const [settings, setSettings] = useState<GameSettings>(() => loadSettings());
+  const [teamName, setTeamName] = useState(loadTeamName);
   const [progress, setProgress] = useState(() => loadProgress());
   const [battle, setBattle] = useState<BattleState | null>(null);
   const [displayBoard, setDisplayBoard] = useState<BattleState['board']>([]);
@@ -570,10 +571,10 @@ export default function App() {
     {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','cyan','yellow','purple','red','cyan','yellow','green','cyan','yellow','green','purple','red','yellow','green','purple','red','cyan','purple','red','cyan','yellow','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
 
     {screen === 'battle' && battle && <main ref={battleShellRef} className="battle-shell">
-      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><b>{battle.stage.id}</b><span>第 {battle.turns} 回合</span></div><button ref={pauseButtonRef} className="tool-button pause-trigger" onClick={() => setPaused(true)} aria-label="暫停與設定">Ⅱ</button></header>
+      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><strong className="battle-stage-title">{battle.stage.title}</strong><span>{battle.stage.id} · 第 {battle.turns} 回合</span></div><button ref={pauseButtonRef} className="tool-button pause-trigger" onClick={() => setPaused(true)} aria-label="暫停與設定">Ⅱ</button></header>
 
       <Battlefield enemy={battle.enemy} hp={enemyHp} playerHp={playerHp} shield={enemyShield}
-        stageTitle={battle.stage.title} nextAction={actionText(battle)} bossCharge={displayBossCharge} status={lastAction} cue={damageToast}
+        teamName={teamName} onTeamNameChange={(name) => setTeamName(saveTeamName(name))} nextAction={actionText(battle)} bossCharge={displayBossCharge} status={lastAction} cue={damageToast}
         activeCharacter={activeCharacter} charges={displayCharges} skillsDisabled={busy || paused || hiddenPause || battle.status !== 'playing'} onSkillSelect={openSkillPanel} strike={strike} playerHurt={playerHurt}
         paused={paused || hiddenPause} skipping={skipAnimation} presenting={busy} />
 

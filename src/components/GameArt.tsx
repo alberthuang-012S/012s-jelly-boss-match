@@ -49,11 +49,9 @@ export function CharacterArt({ id, className = '' }: { id: CharacterId; classNam
 export function JellyTile({ color, selected, fog, lockHits, confused, dimmed }: {
   color: JellyColor; selected: boolean; fog?: number; lockHits?: number; confused?: number; dimmed?: boolean;
 }) {
-  const meta = Object.values(CHARACTERS).find((character) => character.color === color)!;
   return (
     <span className={`jelly-art jelly-art--${color}${selected ? ' is-selected' : ''}${dimmed ? ' is-dimmed' : ''}`}>
       <img src={`${import.meta.env.BASE_URL}assets/jellies/${color}.webp`} alt="" draggable="false" />
-      <span className="jelly-symbol" aria-hidden="true">{meta.symbol}</span>
       {fog ? <span className="jelly-fog" aria-hidden="true"><i /><i /></span> : null}
       {confused ? <span className="jelly-confused" aria-hidden="true">?</span> : null}
       {lockHits ? <span className={`jelly-lock${lockHits > 1 ? ' jelly-lock--stone' : ''}`} aria-hidden="true">{lockHits > 1 ? '✦' : '⌑'}</span> : null}

@@ -126,7 +126,15 @@
 .battlefield-hud { gap: 24px; }
 .battlefield-vitals { width: 44%; min-width: 0; }
 .battlefield-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 18px; }
-.battlefield-team-name { text-align: left; }
+.battlefield-team-name { display: flex; align-items: center; gap: 5px; width: 100%; height: 28px; padding: 0; border: 0; background: none; text-align: left; font-weight: 700; cursor: pointer; }
+.battlefield-team-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.battlefield-team-name > small { flex-shrink: 0; color: #99a6b5; font-size: 12px; }
+.battlefield-team-name:disabled { cursor: default; }
+.battlefield-name-editor { display: flex; align-items: center; gap: 2px; height: 28px; margin-bottom: 6px; }
+.battlefield-name-editor input { width: 0; min-width: 0; flex: 1; padding: 4px; border: 1px solid #c2d8cd; border-radius: 5px; color: #526079; background: #ffffffc9; font-size: 12px; }
+.battlefield-name-editor button { flex-shrink: 0; width: 24px; height: 28px; padding: 0; border: 0; border-radius: 5px; color: #52796b; background: #ffffffa8; cursor: pointer; }
+.battlefield-name-editor button:disabled { opacity: .4; }
+.battlefield-vitals > h1 { display: flex; align-items: center; justify-content: flex-end; height: 28px; }
 .battlefield-hp-label { font-size: 10px; }
 .battlefield-hp { height: 6px; }
 .battlefield-team .battlefield-hp { background: #dce9e4; }

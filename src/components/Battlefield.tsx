@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { CHARACTERS } from '../game/content/characters';
 import { CHARACTER_IDS, type BossChargeState, type CharacterCharges, type CharacterId, type EnemyConfig } from '../game/types';
 import { CHARACTER_SKILLS } from '../game/content/skills';
@@ -30,7 +30,8 @@ type Props = {
   shield: number;
   nextAction: string;
   bossCharge: BossChargeState | null;
-  stageTitle: string;
+  teamName: string;
+  onTeamNameChange: (name: string) => void;
   status: string;
   cue: string;
   activeCharacter: CharacterId | null;
@@ -44,8 +45,15 @@ type Props = {
   presenting: boolean;
 };
 
-export function Battlefield({ enemy, hp, playerHp, shield, nextAction, bossCharge, stageTitle, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping, presenting }: Props) {
+export function Battlefield({ enemy, hp, playerHp, shield, nextAction, bossCharge, teamName, onTeamNameChange, status, cue, activeCharacter, charges, skillsDisabled, onSkillSelect, strike, playerHurt, paused, skipping, presenting }: Props) {
   const fieldRef = useRef<HTMLElement>(null);
+  const nameButtonRef = useRef<HTMLButtonElement>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(teamName);
+  const closeNameEditor = () => {
+    setEditingName(false);
+    requestAnimationFrame(() => nameButtonRef.current?.focus());
+  };
   useLayoutEffect(() => {
     fieldRef.current?.getAnimations({ subtree: true }).forEach((animation) => {
       if (paused) animation.pause();
@@ -68,7 +76,18 @@ export function Battlefield({ enemy, hp, playerHp, shield, nextAction, bossCharg
   return <section ref={fieldRef} className={`battlefield battlefield--${strike.phase} battlefield--chain-${strike.chainWaves}${hitting ? ' battlefield--hit' : ''}${strongHit ? ' battlefield--strong' : ''}${bossCharge ? ' battlefield--charging' : ''}${strike.fast ? ' battlefield--fast' : ''}${playerHurt ? ' battlefield--player-hit' : ''}${paused ? ' battlefield--paused' : ''}${skipping ? ' battlefield--skip' : ''}`} aria-label="小隊戰場">
     <header className="battlefield-hud">
       <div className={`battlefield-vitals battlefield-team${playerHp <= 25 ? ' battlefield-team--low' : ''}`}>
-        <div className="battlefield-name battlefield-team-name" title={stageTitle}>{stageTitle}</div>
+        {editingName ? <form className="battlefield-name-editor" onSubmit={(event) => {
+          event.preventDefault();
+          if (!nameDraft.trim()) return;
+          onTeamNameChange(nameDraft);
+          closeNameEditor();
+        }} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); closeNameEditor(); } }}>
+          <input autoFocus aria-label="小隊名稱" value={nameDraft} maxLength={12} placeholder="最多 12 個字" onChange={(event) => setNameDraft(event.target.value)} />
+          <button type="submit" aria-label="儲存小隊名稱" disabled={!nameDraft.trim()}>✓</button>
+          <button type="button" aria-label="取消改名" onClick={closeNameEditor}>×</button>
+        </form> : <button ref={nameButtonRef} type="button" className="battlefield-name battlefield-team-name" title={teamName} aria-label={`修改小隊名稱：${teamName}`} disabled={skillsDisabled} onClick={() => { setNameDraft(teamName); setEditingName(true); }}>
+          <span>{teamName}</span><small aria-hidden="true">✎</small>
+        </button>}
         <div className="battlefield-hp-label"><span>♥ 小隊 HP</span><b>{playerHp}<small> / 100</small></b></div>
         <div className="battlefield-hp" role="progressbar" aria-label="玩家 HP" aria-valuemin={0} aria-valuemax={100} aria-valuenow={playerHp}>
           <span className="battlefield-hp-fill" style={{ width: `${Math.max(0, Math.min(100, playerHp))}%` }} />
