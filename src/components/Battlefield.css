@@ -173,6 +173,8 @@
 @keyframes battlefield-tap { 0%,100% { transform: translateX(0); } 30% { transform: translateX(3px) scaleX(.98); } }
 @keyframes battlefield-heavy-hit { 0%,100% { transform: translateX(0) rotate(0); } 24% { transform: translateX(7px) rotate(5deg); } 56% { transform: translateX(-2px) rotate(-1deg); } }
 @keyframes battlefield-notice-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+.battlefield-intent { display: grid; place-items: center; min-height: 44px; padding: 5px 10px 8px; color: #8190a4; font-size: 10px; text-align: center; }
+.battlefield-intent .battlefield-charge-notice { width: 100%; margin: 0; padding: 4px 6px; gap: 2px; }
 @media (prefers-reduced-motion: reduce) {
   .battlefield--rush .battlefield-hero-name,
   .battlefield--impact .battlefield-hero-name { opacity: 1; }

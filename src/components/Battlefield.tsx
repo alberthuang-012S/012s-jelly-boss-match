@@ -144,8 +144,10 @@ export function Battlefield({ enemy, hp, playerHp, shield, nextAction, bossCharg
       </div> : notice ? <span key={notice} className={`battlefield-notice${playerHurt ? ' battlefield-notice--hurt' : ''}`} role="status">{notice}</span> : null}
     </div>
 
-    <span className="sr-only">下一招：{nextAction}</span>
-    {bossCharge && <div className="battlefield-charge-notice" role="status"><b>⚡ {bossCharge.title} · {bossCharge.effectText}</b><span>下次有效交換達成 2 波消除可打斷</span></div>}
+    <div className="battlefield-intent">
+      {bossCharge ? <div className="battlefield-charge-notice" role="status"><b>⚡ {bossCharge.title} · {bossCharge.effectText}</b><span>下次有效交換達成 2 波消除，或使用 QCC 可打斷</span></div>
+        : <span>下一招：{nextAction}</span>}
+    </div>
 
   </section>;
 }

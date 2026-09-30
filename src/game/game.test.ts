@@ -323,6 +323,32 @@ describe('aggregation and damage', () => {
 });
 
 describe('seeded RNG and battle turn flow', () => {
+  it.each(STAGES)('starts stage $id with a valid enemy and a playable board', (stage) => {
+    const battle = createBattle(stage, new SeededRandom(stage.id));
+    expect(battle.enemy.maxHp).toBeGreaterThan(0);
+    expect(battle.enemy.attackPattern.length).toBeGreaterThan(0);
+    expect(findMatches(battle.board)).toHaveLength(0);
+    expect(hasAnyValidSwap(battle.board)).toBe(true);
+    if (stage.chapter >= 3) {
+      expect(battle.enemy.type).toBe(stage.number === 4 ? 'boss' : 'normal');
+      for (const action of [...battle.enemy.attackPattern, ...(battle.enemy.bossSpecial?.actions ?? [])]) {
+        if (action.type === 'stone') expect(action.amount).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it.each(['fog', 'blocker'] as const)('limits accumulated %s and avoids overlapping board effects', (type) => {
+    const { battle, random } = makeBattle(71);
+    battle.enemy = { ...battle.enemy, attackPattern: [{ type, amount: 20 }] };
+    battle.board[5]![0]!.fog = 2;
+    battle.board[5]![1]!.lockHits = 1;
+    const result = forceMatchTurn(battle, 'green', random);
+    const effect = result.events.filter((event) => event.type === 'BOARD_EFFECT').at(-1);
+    if (effect?.type !== 'BOARD_EFFECT') throw new Error('Missing enemy board effect');
+    expect(effect.board.flat().filter((tile) => tile?.fog).length).toBeLessThanOrEqual(GAME_CONFIG.maxFogTiles);
+    expect(effect.board.flat().filter((tile) => tile?.lockHits).length).toBeLessThanOrEqual(GAME_CONFIG.maxLockedTiles);
+    expect(effect.board.flat().some((tile) => tile?.fog && tile.lockHits)).toBe(false);
+  });
   it('applies one-layer stone locks that one adjacent match can clear', () => {
     const random = new SeededRandom(42);
     const battle = createBattle(STAGES.find((stage) => stage.enemyId === 'joint')!, random);
@@ -576,11 +602,10 @@ describe('character charge and skill rules', () => {
     expect(skillUnavailableReason({ ...battle, enemyShield: 0 }, 'KTT')).toMatch(/沒有護盾/);
   });
 
-  it('lets COO cleanse fog, question marks, and one lock layer without moving or replacing any tile', () => {
+  it('lets COO cleanse fog and one lock layer without moving or replacing any tile', () => {
     const { battle } = makeBattle();
     battle.characterCharges.COO = CHARACTER_SKILLS.COO.chargeCost;
     battle.board[0]![0]!.fog = 2;
-    battle.board[0]![1]!.confused = 1;
     battle.board[0]![2]!.lockHits = 1;
     battle.board[1]![0]!.lockHits = 3;
     const before = battle.board.map((row) => row.map((tile) => tile && ({ id: tile.id, color: tile.color })));
@@ -588,7 +613,6 @@ describe('character charge and skill rules', () => {
     expect(used.accepted).toBe(true);
     expect(used.battle.board.map((row) => row.map((tile) => tile && ({ id: tile.id, color: tile.color })))).toEqual(before);
     expect(used.battle.board[0]![0]!.fog).toBeUndefined();
-    expect(used.battle.board[0]![1]!.confused).toBeUndefined();
     expect(used.battle.board[0]![2]!.lockHits).toBeUndefined();
     expect(used.battle.board[1]![0]!.lockHits).toBe(2);
     const cleanBoard = used.battle.board.map((row) => row.map((tile) => tile ? { ...tile, lockHits: undefined } : null));

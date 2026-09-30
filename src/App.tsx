@@ -6,7 +6,7 @@ import { useBoardSize } from './components/useBoardSize';
 import { CHARACTERS } from './game/content/characters';
 import { characterForColor } from './game/content/characters';
 import { ENEMIES } from './game/content/enemies';
-import { STAGES } from './game/content/stages';
+import { CHAPTERS, STAGES } from './game/content/stages';
 import { SeededRandom } from './game/rng/SeededRandom';
 import { createBattle } from './game/battle/battleFactory';
 import { forceCascadeTurn, forceMatchTurn, resolveTurn } from './game/battle/turnResolver';
@@ -43,6 +43,8 @@ function makeCue() {
 }
 
 function actionText(battle: BattleState): string {
+  if (battle.bossCharge) return `${battle.bossCharge.title} · ${battle.bossCharge.effectText}`;
+  if (battle.enemy.bossSpecial && battle.bossSpecialCooldown <= 0) return `蓄力 · ${battle.enemy.bossSpecial.title}`;
   const action = battle.enemy.attackPattern[battle.turns % battle.enemy.attackPattern.length]!;
   switch (action.type) {
     case 'attack': return `攻擊 ${action.amount}`;
@@ -50,7 +52,6 @@ function actionText(battle: BattleState): string {
     case 'fog': return '迷霧';
     case 'shield': return `護盾 +${action.amount}`;
     case 'darken': return '陰影';
-    case 'confuse': return '問號干擾';
     case 'slime': return `黏液 +${action.amount}`;
     case 'stone': return `石化 +${action.amount}`;
   }
@@ -514,7 +515,7 @@ export default function App() {
           <p className="home-tagline">集結水母能量，<br className="mobile-break" />挑戰異常怪獸。</p>
           <p className="home-desc">交換水母、串起連鎖，讓五位夥伴把每一點能量都變成漂亮的反擊。</p>
           <div className="home-buttons"><button className="primary-button" onClick={() => setScreen('select')}>開始冒險 <span aria-hidden="true">↗</span></button><button className="secondary-button" onClick={() => setScreen('help')}>看看玩法 <span aria-hidden="true">→</span></button></div>
-          <div className="chapter-progress"><div className="chapter-progress__mark">✦</div><div><b>CHAPTER 01</b><span>已解鎖 {Math.max(1, progress.maxUnlockedIndex + 1)} / {STAGES.length} 個關卡</span></div><button onClick={() => setScreen('select')} aria-label="選擇關卡">↗</button></div>
+          <div className="chapter-progress"><div className="chapter-progress__mark">✦</div><div><b>CHAPTER {String(STAGES[progress.maxUnlockedIndex]?.chapter ?? 1).padStart(2, '0')}</b><span>已解鎖 {Math.max(1, progress.maxUnlockedIndex + 1)} / {STAGES.length} 個關卡</span></div><button onClick={() => setScreen('select')} aria-label="選擇關卡">↗</button></div>
         </div>
         <div className="home-hero__art" aria-label="五位膠囊夥伴">
           <div className="hero-orbit hero-orbit--one" /><div className="hero-orbit hero-orbit--two" /><span className="hero-star hero-star--a">✦</span><span className="hero-star hero-star--b">✧</span><div className="hero-spark hero-spark--a"/><div className="hero-spark hero-spark--b"/>
@@ -530,11 +531,11 @@ export default function App() {
 
     {screen === 'select' && <main className="selection-screen">
       <div className="section-heading"><div><span className="eyebrow">STAGE SELECT · 冒險地圖</span><h1>選一個關卡，<br className="mobile-break"/>開始出發。</h1></div><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button></div>
-      <div className="stage-chapters">{([1, 2] as const).map((chapter) => {
+      <div className="stage-chapters">{CHAPTERS.map(({ id: chapter, title: chapterTitle }) => {
         const chapterStages = STAGES.map((stage, index) => ({ stage, index })).filter(({ stage }) => stage.chapter === chapter);
         const clearCount = chapterStages.filter(({ stage }) => progress.clearedIds.includes(stage.id)).length;
         return <section className="stage-chapter" key={chapter}>
-          <div className="chapter-heading"><span>{String(chapter).padStart(2,'0')}</span><div><b>CHAPTER {String(chapter).padStart(2,'0')}</b><strong>{chapter === 1 ? '水母小隊集合！' : '全新的怪獸挑戰'}</strong></div><small>{clearCount} / {chapterStages.length} CLEAR</small></div>
+          <div className="chapter-heading"><span>{String(chapter).padStart(2,'0')}</span><div><b>CHAPTER {String(chapter).padStart(2,'0')}</b><strong>{chapterTitle}</strong></div><small>{clearCount} / {chapterStages.length} CLEAR</small></div>
           <div className="stage-grid">
         {chapterStages.map(({ stage, index }) => {
           const enemy = ENEMIES[stage.enemyId]!;
@@ -586,7 +587,7 @@ export default function App() {
             const sel = selected?.row === rowIndex && selected.col === colIndex;
             const activeMatch = matches.has(`${rowIndex},${colIndex}`);
             const character = tile ? characterForColor(tile.color) : null;
-            const label = tile ? `${character?.id} ${tile.color} 水母，第 ${rowIndex+1} 列第 ${colIndex+1} 欄${tile.lockHits ? '，被障礙鎖住' : ''}${tile.fog ? '，迷霧覆蓋但顏色可辨識' : ''}${tile.confused ? '，有問號標記' : ''}` : `空格，第 ${rowIndex+1} 列第 ${colIndex+1} 欄`;
+            const label = tile ? `${character?.id} ${tile.color} 水母，第 ${rowIndex+1} 列第 ${colIndex+1} 欄${tile.lockHits ? '，被障礙鎖住' : ''}${tile.fog ? '，迷霧覆蓋但顏色可辨識' : ''}` : `空格，第 ${rowIndex+1} 列第 ${colIndex+1} 欄`;
             return <button id={`cell-${rowIndex}-${colIndex}`} key={`${rowIndex}-${colIndex}`} type="button" className={`board-cell${sel ? ' board-cell--selected' : ''}${activeMatch ? ' board-cell--match' : ''}${invalidCells.has(`${rowIndex},${colIndex}`) ? ' board-cell--invalid' : ''}${tile?.lockHits ? ' board-cell--locked' : ''}`} aria-label={label} aria-pressed={sel} disabled={busy || hiddenPause || !tile || Boolean(tile.lockHits) || battle.status !== 'playing'} onPointerDown={(event) => {
                 if (event.button !== 0 || !event.isPrimary || busyRef.current) return;
                 suppressClickRef.current = false;
@@ -611,7 +612,7 @@ export default function App() {
                 if (event.detail > 0 && suppressClickRef.current) { suppressClickRef.current = false; return; }
                 selectTile(cell);
               }} onKeyDown={(e) => handleCellKey(e, cell)} data-testid={`cell-${rowIndex}-${colIndex}`}>
-              {tile && <span className="tile-motion" data-tile-id={tile.id}><JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits} confused={tile.confused} dimmed={battle.darkTurns > 0}/></span>}
+              {tile && <span className="tile-motion" data-tile-id={tile.id}><JellyTile color={tile.color} selected={sel || activeMatch} fog={tile.fog} lockHits={tile.lockHits} dimmed={battle.darkTurns > 0}/></span>}
             </button>;
           }))}
         </div>
@@ -620,7 +621,7 @@ export default function App() {
 
       <footer className="battle-footer"><div className="battle-footer-actions">{busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} disabled={skipAnimation || hiddenPause} aria-label="略過目前動畫">{skipAnimation ? '結算中…' : '略過動畫 ›'}</button>}{isDebug && !busy && <span className="seed-note">SEED {seedLabel.toUpperCase()}</span>}{isDebug && <button className="debug-toggle" onClick={() => setShowDebug((v) => !v)}>DEBUG</button>}</div></footer>
 
-      {isDebug && showDebug && <section className="debug-panel"><div className="debug-panel__head"><b>DEBUG PANEL</b><span>SEED {seedLabel}</span><button onClick={() => setShowDebug(false)}>收起 ×</button></div><div className="debug-seed"><input value={debugSeed} onChange={(e) => setDebugSeed(e.target.value)} aria-label="輸入 RNG Seed"/><button onClick={() => startStage(displayedStageIndexRef.current, debugSeed)}>套用 Seed</button><button onClick={() => pushLog(`RNG seed ${seedLabel}`)}>顯示 Seed</button></div><div className="debug-actions"><button onClick={debugWin}>Win Stage</button><button onClick={() => debugNudge('enemy')}>Boss HP −50</button><button onClick={() => debugNudge('player')}>Player HP −20</button><button onClick={() => startStage(displayedStageIndexRef.current, seedLabel)}>Reset Stage</button><button onClick={() => { setProgress(unlockAll()); }}>Unlock All Stages</button><button onClick={debugCascade}>Force Cascade Board</button>{CHARACTER_IDS.map((id) => <button key={id} onClick={() => debugResolution(CHARACTERS[id].color)}>Force {id} Match</button>)}</div><div className="debug-log"><b>Last Turn Stats · {totalPower(battle.turnStats)} TOTAL</b>{STAT_KEYS.map((s) => <span key={s}>{s} {battle.turnStats[s]}</span>)}<details><summary>Event Log（最近 24 則）</summary>{eventLog.slice(-24).map((entry,i)=><p key={`${i}-${entry}`}>{entry}</p>)}</details></div></section>}
+      {isDebug && showDebug && <section className="debug-panel"><div className="debug-panel__head"><b>DEBUG PANEL</b><span>SEED {seedLabel}</span><button onClick={() => setShowDebug(false)}>收起 ×</button></div><label className="debug-stage-picker">測試關卡 <select aria-label="測試關卡" value={displayedStageIndexRef.current} onChange={(event) => startStage(Number(event.target.value))}>{STAGES.map((stage, index) => <option key={stage.id} value={index}>{stage.id} · {stage.title}</option>)}</select></label><div className="debug-seed"><input value={debugSeed} onChange={(e) => setDebugSeed(e.target.value)} aria-label="輸入 RNG Seed"/><button onClick={() => startStage(displayedStageIndexRef.current, debugSeed)}>套用 Seed</button><button onClick={() => pushLog(`RNG seed ${seedLabel}`)}>顯示 Seed</button></div><div className="debug-actions"><button onClick={debugWin}>Win Stage</button><button onClick={() => debugNudge('enemy')}>Boss HP −50</button><button onClick={() => debugNudge('player')}>Player HP −20</button><button onClick={() => startStage(displayedStageIndexRef.current, seedLabel)}>Reset Stage</button><button onClick={() => { setProgress(unlockAll()); }}>Unlock All Stages</button><button onClick={debugCascade}>Force Cascade Board</button>{CHARACTER_IDS.map((id) => <button key={id} onClick={() => debugResolution(CHARACTERS[id].color)}>Force {id} Match</button>)}</div><div className="debug-log"><b>Last Turn Stats · {totalPower(battle.turnStats)} TOTAL</b>{STAT_KEYS.map((s) => <span key={s}>{s} {battle.turnStats[s]}</span>)}<details><summary>Event Log（最近 24 則）</summary>{eventLog.slice(-24).map((entry,i)=><p key={`${i}-${entry}`}>{entry}</p>)}</details></div></section>}
 
     </main>}
 

@@ -10,6 +10,8 @@ export function useBoardSize(ref: RefObject<HTMLElement | null>, active: boolean
     const fixed = Array.from(shell.children).filter((child) =>
       child.matches('.battle-topbar, .battlefield, .stats-panel, .battle-footer')) as HTMLElement[];
     let frame = 0;
+    let viewportWidth = window.innerWidth;
+    let viewportHeight = window.innerHeight;
     const fit = () => {
       const style = getComputedStyle(shell);
       const sectionStyle = getComputedStyle(section);
@@ -25,7 +27,13 @@ export function useBoardSize(ref: RefObject<HTMLElement | null>, active: boolean
       const value = `${width}px`;
       if (shell.style.getPropertyValue('--board-size') !== value) shell.style.setProperty('--board-size', value);
     };
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
+    const schedule = () => {
+      if (viewportWidth === window.innerWidth && viewportHeight === window.innerHeight) return;
+      viewportWidth = window.innerWidth;
+      viewportHeight = window.innerHeight;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    };
     window.addEventListener('resize', schedule);
     fit();
     return () => {

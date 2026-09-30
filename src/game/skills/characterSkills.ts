@@ -18,7 +18,7 @@ export function skillUnavailableReason(battle: BattleState, characterId: Charact
     case 'REE': return battle.reeBoostPending ? '烈焰增幅已待命，不能疊加' : null;
     case 'KTT': return battle.enemyShield > 0 ? null : '敵人目前沒有護盾';
     case 'COO':
-      return battle.board.some((row) => row.some((tile) => tile && (tile.fog || tile.confused || tile.lockHits))) ? null : '盤面目前沒有可淨化的迷霧、問號或鎖定';
+      return battle.board.some((row) => row.some((tile) => tile && (tile.fog || tile.lockHits))) ? null : '盤面目前沒有可淨化的迷霧或鎖定';
   }
   return null;
 }
@@ -60,14 +60,13 @@ export function useCharacterSkill(battle: BattleState, characterId: CharacterId)
         if (!tile) return null;
         const clean = { ...tile };
         delete clean.fog;
-        delete clean.confused;
         if (clean.lockHits) {
           clean.lockHits -= 1;
           if (clean.lockHits <= 0) delete clean.lockHits;
         }
         return clean;
       }));
-      events.push({ type: 'BOARD_EFFECT', board: board.map((row) => row.map((tile) => tile ? { ...tile } : null)), message: '金光淨化！迷霧與問號清除，鎖定減弱' });
+      events.push({ type: 'BOARD_EFFECT', board: board.map((row) => row.map((tile) => tile ? { ...tile } : null)), message: '金光淨化！迷霧清除，鎖定減弱' });
       next = { ...next, board };
       break;
     }

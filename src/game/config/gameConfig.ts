@@ -7,6 +7,8 @@ export const GAME_CONFIG = {
   minStatGain: 1,
   maxStatGain: 3,
   maxCascades: 20,
+  maxLockedTiles: 4,
+  maxFogTiles: 6,
   maxFloatingGroups: 3,
   initialBoardAttempts: 40,
   chainMultipliers: [1, 1.15, 1.3, 1.5] as const,

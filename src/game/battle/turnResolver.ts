@@ -29,7 +29,6 @@ function actionMessage(action: EnemyAction): string {
     case 'fog': return '迷霧來襲';
     case 'shield': return `護盾 +${action.amount}`;
     case 'darken': return '陰影覆蓋';
-    case 'confuse': return '問號干擾';
     case 'slime': return `黏液格 +${action.amount}`;
     case 'stone': return `石化格 +${action.amount}`;
   }
@@ -48,24 +47,26 @@ function resolveActionEffects(action: EnemyAction, board: Board, playerHp: numbe
     case 'blocker':
     case 'slime':
     case 'stone':
-    case 'fog':
-    case 'confuse': {
+    case 'fog': {
       const eligible: Cell[] = [];
+      const isFog = action.type === 'fog';
+      const affected = board.flat().filter((tile) => tile && (isFog ? tile.fog : tile.lockHits)).length;
+      const capacity = Math.max(0, (isFog ? GAME_CONFIG.maxFogTiles : GAME_CONFIG.maxLockedTiles) - affected);
       for (let row = 0; row < board.length; row += 1) {
         for (let col = 0; col < (board[row]?.length ?? 0); col += 1) {
-          if (!board[row]?.[col]?.lockHits) eligible.push({ row, col });
+          const tile = board[row]?.[col];
+          if (tile && !tile.lockHits && !tile.fog) eligible.push({ row, col });
         }
       }
-      const count = Math.min(action.amount, eligible.length);
+      const count = Math.min(action.amount, eligible.length, capacity);
       for (const cell of sampleWithoutReplacement(random, eligible, count)) {
         const tile = board[cell.row]?.[cell.col];
         if (!tile) continue;
         if (action.type === 'blocker' || action.type === 'slime') tile.lockHits = 1;
         else if (action.type === 'stone') tile.lockHits = 1;
         else if (action.type === 'fog') tile.fog = 2;
-        else tile.confused = 2;
       }
-      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: actionMessage(action) });
+      events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: count ? actionMessage({ ...action, amount: count }) : '盤面干擾已達上限' });
       break;
     }
     case 'shield':
@@ -196,7 +197,6 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
       for (const tile of row) {
         if (!tile) continue;
         if (tile.fog) { tile.fog -= 1; conditionsChanged = true; if (!tile.fog) delete tile.fog; }
-        if (tile.confused) { tile.confused -= 1; conditionsChanged = true; if (!tile.confused) delete tile.confused; }
       }
     }
     if (conditionsChanged) events.push({ type: 'BOARD_EFFECT', board: eventBoard(board), message: '干擾效果減弱' });

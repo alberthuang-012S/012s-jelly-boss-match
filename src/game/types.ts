@@ -31,7 +31,6 @@ export type EnemyAction =
   | { type: 'fog'; amount: number }
   | { type: 'shield'; amount: number }
   | { type: 'darken'; turns: number }
-  | { type: 'confuse'; amount: number }
   | { type: 'slime'; amount: number }
   | { type: 'stone'; amount: number };
 
@@ -51,7 +50,7 @@ export type EnemyConfig = {
   id: string;
   name: string;
   type: 'normal' | 'boss';
-  kind: 'bacteria' | 'cold' | 'sleepy' | 'forgetful' | 'blur' | 'three-high' | 'slime' | 'joint';
+  kind: 'bacteria' | 'cold' | 'sleepy' | 'forgetful' | 'blur' | 'three-high' | 'slime' | 'joint' | 'shell' | 'forest';
   maxHp: number;
   attackPattern: readonly EnemyAction[];
   bossSpecial?: BossSpecialConfig;
@@ -77,8 +76,6 @@ export type Tile = {
   fog?: number;
   /** Locked tiles cannot move. An adjacent match chips the lock away. */
   lockHits?: number;
-  /** Decorative hint only; the jelly symbol remains fully visible. */
-  confused?: number;
 };
 export type Board = (Tile | null)[][];
 export type CharacterStats = Record<CharacterId, Record<StatKey, number>>;
