@@ -46,14 +46,16 @@ function actionText(battle: BattleState): string {
   if (battle.bossCharge) return `${battle.bossCharge.title} · ${battle.bossCharge.effectText}`;
   if (battle.enemy.bossSpecial && battle.bossSpecialCooldown <= 0) return `蓄力 · ${battle.enemy.bossSpecial.title}`;
   const action = battle.enemy.attackPattern[battle.turns % battle.enemy.attackPattern.length]!;
+  const actionName = battle.enemy.actionNames?.[battle.turns % battle.enemy.attackPattern.length];
+  const prefix = actionName ? `${actionName} · ` : '';
   switch (action.type) {
-    case 'attack': return `攻擊 ${action.amount}`;
-    case 'blocker': return `障礙 +${action.amount}`;
-    case 'fog': return '迷霧';
-    case 'shield': return `護盾 +${action.amount}`;
-    case 'darken': return '陰影';
-    case 'slime': return `黏液 +${action.amount}`;
-    case 'stone': return `石化 +${action.amount}`;
+    case 'attack': return `${prefix}攻擊 ${action.amount}`;
+    case 'blocker': return `${prefix}障礙 +${action.amount}`;
+    case 'fog': return `${prefix}迷霧 ${action.amount} 格`;
+    case 'shield': return `${prefix}護盾 +${action.amount}`;
+    case 'darken': return `${prefix}陰影`;
+    case 'slime': return `${prefix}黏液 +${action.amount}`;
+    case 'stone': return `${prefix}石化 +${action.amount}`;
   }
 }
 

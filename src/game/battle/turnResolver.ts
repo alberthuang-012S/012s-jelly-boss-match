@@ -224,7 +224,8 @@ function prepareMatchBoard(battle: BattleState, initialBoard: Board, random: Ran
     } else {
       const pattern = battle.enemy.attackPattern;
       const action = pattern[(battle.turns) % pattern.length]!;
-      events.push({ type: 'ENEMY_ACTION', action, message: actionMessage(action) });
+      const actionName = battle.enemy.actionNames?.[battle.turns % pattern.length];
+      events.push({ type: 'ENEMY_ACTION', action, message: `${actionName ? `${actionName} · ` : ''}${actionMessage(action)}` });
       const result = resolveActionEffects(action, board, playerHp, enemyShieldAfterAction, darkTurns, random);
       playerHp = result.playerHp;
       enemyShieldAfterAction = result.enemyShield;

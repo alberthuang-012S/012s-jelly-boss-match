@@ -50,9 +50,10 @@ export type EnemyConfig = {
   id: string;
   name: string;
   type: 'normal' | 'boss';
-  kind: 'bacteria' | 'cold' | 'sleepy' | 'forgetful' | 'blur' | 'three-high' | 'slime' | 'joint' | 'shell' | 'forest';
+  kind: 'bacteria' | 'cold' | 'sleepy' | 'forgetful' | 'blur' | 'three-high' | 'slime' | 'joint' | 'capsule' | 'biofilm' | 'crystal' | 'superbug' | 'rhinitis' | 'mucus' | 'bronchus' | 'influenza';
   maxHp: number;
   attackPattern: readonly EnemyAction[];
+  actionNames?: readonly string[];
   bossSpecial?: BossSpecialConfig;
   statMultipliers?: Partial<Record<StatKey, number>>;
   asset: string;

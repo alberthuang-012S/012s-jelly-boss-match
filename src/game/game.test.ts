@@ -331,6 +331,7 @@ describe('seeded RNG and battle turn flow', () => {
     expect(hasAnyValidSwap(battle.board)).toBe(true);
     if (stage.chapter >= 3) {
       expect(battle.enemy.type).toBe(stage.number === 4 ? 'boss' : 'normal');
+      expect(battle.enemy.actionNames).toHaveLength(battle.enemy.attackPattern.length);
       for (const action of [...battle.enemy.attackPattern, ...(battle.enemy.bossSpecial?.actions ?? [])]) {
         if (action.type === 'stone') expect(action.amount).toBeLessThanOrEqual(2);
       }

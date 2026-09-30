@@ -1,5 +1,6 @@
 import type { CharacterId, JellyColor } from '../game/types';
 import { CHARACTERS } from '../game/content/characters';
+import { DiseaseEnemyArt } from './DiseaseEnemyArt';
 
 export function CharacterArt({ id, className = '' }: { id: CharacterId; className?: string }) {
   const accent = CHARACTERS[id].accent;
@@ -70,30 +71,7 @@ export function EnemyArt({ kind, hurt = false }: { kind: string; hurt?: boolean 
         <filter id="foe-shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#313758" floodOpacity=".19"/></filter>
       </defs>
       <ellipse cx="111" cy="144" rx="71" ry="9" fill="#314677" opacity=".09" />
-      {kind === 'shell' && <g filter="url(#foe-shadow)" stroke="#587b9c" strokeWidth="4" strokeLinejoin="round">
-        <path d="M64 113 48 133H76L84 118M147 115l-3 18h27l-10-22" fill="#91b5c5"/>
-        <path d="M46 97 29 88 25 111 49 116M170 96l21-10 4 26-26 4" fill="#aacbd7"/>
-        <path d="M52 108V77q0-45 58-49 58 4 58 49v31q-58 38-116 0Z" fill="#a7c7d6"/>
-        <path d="m110 37-38 25 9 48 29 17 29-17 9-48Z" fill="#d8e8e7"/>
-        <path d="m110 46 26 22-8 34-18 12-18-12-8-34Z" fill="#83aabc"/>
-        <ellipse cx="95" cy="78" rx="4" ry="7" fill="#334c68" stroke="none"/>
-        <ellipse cx="124" cy="78" rx="4" ry="7" fill="#334c68" stroke="none"/>
-        <path d="M101 97q10 8 19 0" fill="none" strokeLinecap="round"/>
-        <path d="m96 25 14-15 14 15" fill="#e8c576" stroke="#b69a5e"/>
-        <path d="M75 49 65 40M148 50l10-10" stroke="#f5ffff" strokeLinecap="round"/>
-      </g>}
-      {kind === 'forest' && <g filter="url(#foe-shadow)" stroke="#518c79" strokeWidth="4" strokeLinejoin="round">
-        <path d="M54 122q-23-19-13-40-6-27 24-37 12-28 41-23 28-12 49 14 29 5 24 35 23 30-1 50-52 27-124 1Z" fill="#9ccdb1"/>
-        <path d="M68 43 56 15l24 6-4 17M142 39l15-27 14 21-17 17" fill="#d1e899"/>
-        <path d="M94 33q-10-19 5-25 13 9 12 23M115 30q9-18 26-13-1 16-23 19" fill="#78ad68"/>
-        <ellipse cx="83" cy="79" rx="14" ry="19" fill="#f7fff4"/>
-        <ellipse cx="132" cy="79" rx="14" ry="19" fill="#f7fff4"/>
-        <ellipse cx="87" cy="82" rx="5" ry="8" fill="#486767" stroke="none"/>
-        <ellipse cx="128" cy="82" rx="5" ry="8" fill="#486767" stroke="none"/>
-        <path d="M97 107q11 9 23 0" fill="none" strokeLinecap="round"/>
-        <path d="M31 114q16-10 35 0m86 9q22-12 39-4" fill="none" stroke="#e7f3f0" strokeWidth="8" opacity=".85" strokeLinecap="round"/>
-        <path d="m54 68 12-8m81 1 12 9" stroke="#d5ebb4" strokeWidth="5" strokeLinecap="round"/>
-      </g>}
+      <DiseaseEnemyArt kind={kind} />
       {kind === 'bacteria' && <g filter="url(#foe-shadow)"><path d="M42 78 26 68 41 61 34 43 52 48 61 28 72 43 91 32 96 51 117 47 112 63 130 72 117 83 125 99 105 102 100 119 80 111 68 126 59 108 40 109 47 91 33 85Z" fill="url(#foe-green)" stroke="#428c83" strokeWidth="5" strokeLinejoin="round"/><ellipse cx="67" cy="76" rx="5" ry="8" fill="#34405a"/><ellipse cx="94" cy="76" rx="5" ry="8" fill="#34405a"/><path d="M70 94 Q82 104 96 93" fill="none" stroke="#3f6371" strokeWidth="4" strokeLinecap="round"/><circle cx="153" cy="104" r="18" fill="#ffd773" stroke="#efaa54" strokeWidth="4"/><circle cx="149" cy="101" r="2.8" fill="#34405a"/><circle cx="158" cy="101" r="2.8" fill="#34405a"/><path d="M149 110q5 5 10 0" stroke="#996351" strokeWidth="2.5" fill="none" strokeLinecap="round"/><circle cx="165" cy="49" r="9" fill="#96e2a1"/><circle cx="179" cy="61" r="5" fill="#bd9aff"/><path d="M38 90 23 98m92-16 16-8m-80 27-8 16" stroke="#528f85" strokeWidth="5" strokeLinecap="round"/></g>}
       {kind === 'cold' && <g filter="url(#foe-shadow)"><path d="M42 100Q21 94 29 76q5-14 20-13 2-29 30-29 18 0 28 16 26-10 41 9 24 1 25 23 1 21-22 23H48Z" fill="#a8dcf5" stroke="#70aecb" strokeWidth="5"/><ellipse cx="78" cy="78" rx="4" ry="7" fill="#3c5270"/><ellipse cx="112" cy="78" rx="4" ry="7" fill="#3c5270"/><path d="M84 94q11-10 23 0" fill="none" stroke="#647f9d" strokeWidth="4" strokeLinecap="round"/><path d="M152 92q25 8 8 27-8 8-22 7" fill="none" stroke="#71b5dc" strokeWidth="6" strokeLinecap="round"/><circle cx="54" cy="48" r="8" fill="#dbf5ff"/><path d="m170 38 6 12h-12zM38 112l5 10h-10z" fill="#8bc9ed"/></g>}
       {kind === 'sleepy' && <g filter="url(#foe-shadow)"><path d="M47 110q-17-13-13-34t24-25q8-29 41-31 32 2 42 29 29 8 31 36-4 31-35 35H66Z" fill="#a9b4ce" stroke="#7988aa" strokeWidth="5"/><path d="M69 77q10 11 20 0m20 0q10 11 20 0" fill="none" stroke="#58637e" strokeWidth="5" strokeLinecap="round"/><path d="M84 99q16-4 31 0" fill="none" stroke="#717c96" strokeWidth="4" strokeLinecap="round"/><path d="M155 51q15-24 24 0t-9 28q22 3 14 23" fill="#ece9fd" stroke="#a49ac8" strokeWidth="3"/><text x="165" y="84" fill="#8d83b6" fontSize="16" fontWeight="900">Z</text></g>}
