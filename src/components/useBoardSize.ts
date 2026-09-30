@@ -1,6 +1,6 @@
 import { useLayoutEffect, type RefObject } from 'react';
 
-/** Fit the board to the actual HUD height, including optional boss warnings. */
+/** Fit once per viewport size; combat effects must not resize touch targets. */
 export function useBoardSize(ref: RefObject<HTMLElement | null>, active: boolean) {
   useLayoutEffect(() => {
     const shell = ref.current;
@@ -26,13 +26,10 @@ export function useBoardSize(ref: RefObject<HTMLElement | null>, active: boolean
       if (shell.style.getPropertyValue('--board-size') !== value) shell.style.setProperty('--board-size', value);
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
-    const resize = new ResizeObserver(schedule);
-    [section, ...fixed].forEach((element) => resize.observe(element));
     window.addEventListener('resize', schedule);
     fit();
     return () => {
       cancelAnimationFrame(frame);
-      resize.disconnect();
       window.removeEventListener('resize', schedule);
     };
   }, [ref, active]);

@@ -339,6 +339,10 @@ button:disabled { cursor: not-allowed; }
 .battle-shell .battle-stage-id { min-width: 0; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
 .battle-stage-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #62718a; }
 .battle-stage-id > span { font-size: 10px; }
+.battle-shell .battle-topbar { grid-template-columns: 70px minmax(0,1fr) 76px; }
+.battle-quick-settings { display: flex; justify-content: flex-end; gap: 4px; }
+.battle-quick-settings .tool-button { width: 36px; height: 36px; font-size: 18px; color: #99a2b5; background: #eef0f6; }
+.battle-quick-settings .tool-button[aria-pressed="true"] { color: #71619d; background: #e6dff3; }
 @media (max-width: 350px) {
   .battle-shell .stats-panel { gap: 4px; }
   .battle-shell .stats-panel__head { width: 58px; flex-basis: 58px; }

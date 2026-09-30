@@ -61,7 +61,7 @@ function resolveActionEffects(action: EnemyAction, board: Board, playerHp: numbe
         const tile = board[cell.row]?.[cell.col];
         if (!tile) continue;
         if (action.type === 'blocker' || action.type === 'slime') tile.lockHits = 1;
-        else if (action.type === 'stone') tile.lockHits = 2;
+        else if (action.type === 'stone') tile.lockHits = 1;
         else if (action.type === 'fog') tile.fog = 2;
         else tile.confused = 2;
       }

@@ -95,7 +95,6 @@ export default function App() {
   const [damageToast, setDamageToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [skipAnimation, setSkipAnimation] = useState(false);
-  const [paused, setPaused] = useState(false);
   const [hiddenPause, setHiddenPause] = useState(false);
   const [strike, setStrike] = useState<StrikeState>(idleStrike);
   const [playerHurt, setPlayerHurt] = useState(false);
@@ -109,15 +108,12 @@ export default function App() {
   const runRef = useRef(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const battleShellRef = useRef<HTMLElement>(null);
-  const pauseDialogRef = useRef<HTMLDivElement>(null);
-  const pauseButtonRef = useRef<HTMLButtonElement>(null);
   const skillDialogRef = useRef<HTMLElement>(null);
   const skillFocusReturnRef = useRef<HTMLElement | null>(null);
   const positionsRef = useRef(new Map<string, { x: number; y: number }>());
   const gestureRef = useRef<{ id: number; x: number; y: number; cell: Cell } | null>(null);
   const suppressClickRef = useRef(false);
   const [popping, setPopping] = useState(false);
-  const pauseRef = useRef(false);
   const hiddenRef = useRef(false);
   const fastRef = useRef(false);
   const soundRef = useRef(false);
@@ -130,15 +126,6 @@ export default function App() {
 
   useBoardSize(battleShellRef, screen === 'battle');
 
-  useEffect(() => {
-    if (paused || hiddenPause) {
-      const previous = document.activeElement;
-      pauseDialogRef.current?.focus();
-      return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
-    }
-  }, [paused, hiddenPause]);
-
-  pauseRef.current = paused;
   hiddenRef.current = hiddenPause;
   fastRef.current = settings.fast;
   soundRef.current = settings.sound;
@@ -169,10 +156,10 @@ export default function App() {
 
   useEffect(() => {
     boardRef.current?.getAnimations({ subtree: true }).forEach((animation) => {
-      if (paused || hiddenPause) animation.pause();
+      if (hiddenPause) animation.pause();
       else if (animation.playState === 'paused') animation.play();
     });
-  }, [paused, hiddenPause, displayBoard]);
+  }, [hiddenPause, displayBoard]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -181,7 +168,6 @@ export default function App() {
   useEffect(() => {
     const visibility = () => {
       setHiddenPause(document.visibilityState === 'hidden');
-      if (document.visibilityState === 'hidden') setPaused(true);
     };
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
@@ -196,8 +182,8 @@ export default function App() {
   }, [selectedSkillCharacter, busy]);
 
   useEffect(() => {
-    if (paused || hiddenPause || screen !== 'battle' || battle?.status !== 'playing') setSelectedSkillCharacter(null);
-  }, [paused, hiddenPause, screen, battle?.status]);
+    if (hiddenPause || screen !== 'battle' || battle?.status !== 'playing') setSelectedSkillCharacter(null);
+  }, [hiddenPause, screen, battle?.status]);
 
   useEffect(() => () => {
     for (const timer of pulseTimers.current) clearTimeout(timer);
@@ -206,17 +192,17 @@ export default function App() {
   const wait = (duration: number) => new Promise<void>((resolve) => {
     const run = runRef.current;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) duration = Math.min(duration, 35);
-    if (skipRef.current && !pauseRef.current && !hiddenRef.current) { resolve(); return; }
+    if (skipRef.current && !hiddenRef.current) { resolve(); return; }
     let remaining = duration;
     let last = performance.now();
     let timer: ReturnType<typeof setTimeout>;
     const tick = () => {
       pulseTimers.current.delete(timer);
       const now = performance.now();
-      if (!pauseRef.current && !hiddenRef.current) remaining = skipRef.current ? 0 : remaining - (now - last);
+      if (!hiddenRef.current) remaining = skipRef.current ? 0 : remaining - (now - last);
       last = now;
       if (remaining <= 0 || run !== runRef.current) { resolve(); return; }
-      timer = setTimeout(tick, pauseRef.current || hiddenRef.current ? 100 : 25);
+      timer = setTimeout(tick, hiddenRef.current ? 100 : 25);
       pulseTimers.current.add(timer);
     };
     timer = setTimeout(tick, 0);
@@ -257,7 +243,6 @@ export default function App() {
     setEventLog([]);
     setSkipAnimation(false);
     setSeedLabel(nextSeed);
-    setPaused(false);
     setHiddenPause(false);
     setScreen('battle');
   };
@@ -405,7 +390,7 @@ export default function App() {
     runRef.current += 1;
     busyRef.current = false;
     gestureRef.current = null;
-    setBusy(false); setPaused(false); setHiddenPause(false); setPopping(false);
+    setBusy(false); setHiddenPause(false); setPopping(false);
     setSelected(null); setMatches(new Set()); setInvalidCells(new Set());
     setSelectedSkillCharacter(null);
     setStrike(idleStrike); setPlayerHurt(false); setDamageToast('');
@@ -414,7 +399,7 @@ export default function App() {
   const leaveBattle = () => { cancelResolution(); setScreen('select'); };
 
   const attemptSwap = (a: Cell, b: Cell) => {
-    if (!battle || busyRef.current || paused || battle.status !== 'playing') return;
+    if (!battle || busyRef.current || hiddenPause || battle.status !== 'playing') return;
     const result = resolveTurn(battle, a, b, rngRef.current ?? new SeededRandom(seedLabel));
     if (result.accepted) { setHasLearnedSwap(true); try { localStorage.setItem('jelly-swap-learned', '1'); } catch { /* Storage may be unavailable. */ } }
     if (result.accepted) pushLog(`TURN ${battle.turns + 1}｜${result.events.filter((event) => event.type === 'JELLY_POP').length} 次消除段`);
@@ -422,7 +407,7 @@ export default function App() {
   };
 
   const selectTile = (cell: Cell) => {
-    if (busyRef.current || paused || !battle) return;
+    if (busyRef.current || hiddenPause || !battle) return;
     if (!selected) { setSelected(cell); return; }
     if (selected.row === cell.row && selected.col === cell.col) { setSelected(null); return; }
     if (Math.abs(selected.row - cell.row) + Math.abs(selected.col - cell.col) === 1) {
@@ -447,7 +432,7 @@ export default function App() {
   const updateSettings = (change: Partial<GameSettings>) => setSettings((value) => ({ ...value, ...change }));
 
   const openSkillPanel = (characterId: CharacterId) => {
-    if (!battle || busyRef.current || paused || hiddenPause || battle.status !== 'playing') return;
+    if (!battle || busyRef.current || hiddenPause || battle.status !== 'playing') return;
     skillFocusReturnRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelectedSkillCharacter(characterId);
   };
@@ -455,7 +440,7 @@ export default function App() {
   const closeSkillPanel = () => setSelectedSkillCharacter(null);
 
   const castSelectedSkill = () => {
-    if (!battle || !selectedSkillCharacter || busyRef.current || paused || hiddenPause || battle.status !== 'playing') return;
+    if (!battle || !selectedSkillCharacter || busyRef.current || hiddenPause || battle.status !== 'playing') return;
     const reason = skillUnavailableReason(battle, selectedSkillCharacter);
     if (reason) return;
     const result = useCharacterSkill(battle, selectedSkillCharacter);
@@ -485,7 +470,7 @@ export default function App() {
 
   const activeSkill = selectedSkillCharacter ? CHARACTER_SKILLS[selectedSkillCharacter] : null;
   const skillBlockReason = selectedSkillCharacter && battle ? skillUnavailableReason(battle, selectedSkillCharacter) : null;
-  const skillCanBeCast = Boolean(selectedSkillCharacter && battle && !skillBlockReason && !busy && !paused && !hiddenPause && battle.status === 'playing');
+  const skillCanBeCast = Boolean(selectedSkillCharacter && battle && !skillBlockReason && !busy && !hiddenPause && battle.status === 'playing');
 
   const debugResolution = (color: JellyColor) => {
     if (!battle || busyRef.current || !rngRef.current) return;
@@ -571,12 +556,12 @@ export default function App() {
     {screen === 'help' && <main className="help-screen"><button className="back-button" onClick={() => setScreen('home')}>← 返回首頁</button><div className="help-intro"><span className="eyebrow">HOW TO PLAY · 玩法說明</span><h1>交換一下，<br className="mobile-break"/>連鎖就出發。</h1><p>每一顆水母都有自己的角色與能量。鍵盤可用方向鍵移動、Shift＋方向鍵交換，Esc 取消選取。</p></div><div className="help-layout"><div className="help-board-mini">{['green','purple','red','cyan','yellow','purple','red','cyan','yellow','green','cyan','yellow','green','purple','red','yellow','green','purple','red','cyan','purple','red','cyan','yellow','green'].map((color,i)=><span key={i}><JellyTile color={color as JellyColor} selected={i===7}/></span>)}</div><ol className="help-list"><li><b>交換相鄰水母</b><span>滑動水母，或點選兩顆相鄰水母。連成三個以上就會消除。</span></li><li><b>每顆都會累積能量</b><span>水母顏色對應一位夥伴；消除的每一顆都會各自產生數值。</span></li><li><b>三項主屬性必定增加</b><span>每顆水母都會讓角色的三項主屬性各增加 +1～3。</span></li><li><b>其他能力隨機追加</b><span>每顆水母可能再帶來 0～2 項額外數值。</span></li><li><b>連鎖越多，能量越高</b><span>水母落下後再次連線，會繼續累積更多數值。</span></li><li><b>能量集中，漂亮反擊</b><span>回合結束時，所有能量會化為一次攻擊。擊敗對手即可過關！</span></li></ol></div><div className="help-callout"><b>本回合能量</b>{STAT_KEYS.slice(0, 5).map((key) => <span key={key}>{key} <i>+2</i></span>)}<strong>→ 集中攻擊 →</strong></div></main>}
 
     {screen === 'battle' && battle && <main ref={battleShellRef} className="battle-shell">
-      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><strong className="battle-stage-title">{battle.stage.title}</strong><span>{battle.stage.id} · 第 {battle.turns} 回合</span></div><button ref={pauseButtonRef} className="tool-button pause-trigger" onClick={() => setPaused(true)} aria-label="暫停與設定">Ⅱ</button></header>
+      <header className="battle-topbar"><button className="battle-exit" onClick={leaveBattle} aria-label="返回選關">← <span>關卡</span></button><div className="battle-stage-id"><strong className="battle-stage-title">{battle.stage.title}</strong><span>{battle.stage.id} · 第 {battle.turns} 回合</span></div><div className="battle-quick-settings"><button className="tool-button" aria-label="快速模式" aria-pressed={settings.fast} onClick={() => updateSettings({ fast: !settings.fast })}>»</button><button className="tool-button" aria-label="音效" aria-pressed={settings.sound} onClick={() => updateSettings({ sound: !settings.sound })}>♪</button></div></header>
 
       <Battlefield enemy={battle.enemy} hp={enemyHp} playerHp={playerHp} shield={enemyShield}
         teamName={teamName} onTeamNameChange={(name) => setTeamName(saveTeamName(name))} nextAction={actionText(battle)} bossCharge={displayBossCharge} status={lastAction} cue={damageToast}
-        activeCharacter={activeCharacter} charges={displayCharges} skillsDisabled={busy || paused || hiddenPause || battle.status !== 'playing'} onSkillSelect={openSkillPanel} strike={strike} playerHurt={playerHurt}
-        paused={paused || hiddenPause} skipping={skipAnimation} presenting={busy} />
+        activeCharacter={activeCharacter} charges={displayCharges} skillsDisabled={busy || hiddenPause || battle.status !== 'playing'} onSkillSelect={openSkillPanel} strike={strike} playerHurt={playerHurt}
+        paused={hiddenPause} skipping={skipAnimation} presenting={busy} />
 
       <StatsPanel stats={displayStats} power={displayPower} chainMultiplier={displayChainMultiplier} reeBoostPending={displayReeBoostPending} animate={Boolean(busy)} />
 
@@ -602,7 +587,7 @@ export default function App() {
             const activeMatch = matches.has(`${rowIndex},${colIndex}`);
             const character = tile ? characterForColor(tile.color) : null;
             const label = tile ? `${character?.id} ${tile.color} 水母，第 ${rowIndex+1} 列第 ${colIndex+1} 欄${tile.lockHits ? '，被障礙鎖住' : ''}${tile.fog ? '，迷霧覆蓋但顏色可辨識' : ''}${tile.confused ? '，有問號標記' : ''}` : `空格，第 ${rowIndex+1} 列第 ${colIndex+1} 欄`;
-            return <button id={`cell-${rowIndex}-${colIndex}`} key={`${rowIndex}-${colIndex}`} type="button" className={`board-cell${sel ? ' board-cell--selected' : ''}${activeMatch ? ' board-cell--match' : ''}${invalidCells.has(`${rowIndex},${colIndex}`) ? ' board-cell--invalid' : ''}${tile?.lockHits ? ' board-cell--locked' : ''}`} aria-label={label} aria-pressed={sel} disabled={busy || paused || !tile || Boolean(tile.lockHits) || battle.status !== 'playing'} onPointerDown={(event) => {
+            return <button id={`cell-${rowIndex}-${colIndex}`} key={`${rowIndex}-${colIndex}`} type="button" className={`board-cell${sel ? ' board-cell--selected' : ''}${activeMatch ? ' board-cell--match' : ''}${invalidCells.has(`${rowIndex},${colIndex}`) ? ' board-cell--invalid' : ''}${tile?.lockHits ? ' board-cell--locked' : ''}`} aria-label={label} aria-pressed={sel} disabled={busy || hiddenPause || !tile || Boolean(tile.lockHits) || battle.status !== 'playing'} onPointerDown={(event) => {
                 if (event.button !== 0 || !event.isPrimary || busyRef.current) return;
                 suppressClickRef.current = false;
                 gestureRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, cell };
@@ -633,18 +618,10 @@ export default function App() {
 
       </section>
 
-      <footer className="battle-footer"><div className="battle-footer-actions">{busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} disabled={skipAnimation || paused || hiddenPause} aria-label="略過目前動畫">{skipAnimation ? '結算中…' : '略過動畫 ›'}</button>}{isDebug && !busy && <span className="seed-note">SEED {seedLabel.toUpperCase()}</span>}{isDebug && <button className="debug-toggle" onClick={() => setShowDebug((v) => !v)}>DEBUG</button>}</div></footer>
+      <footer className="battle-footer"><div className="battle-footer-actions">{busy && <button className="skip-button" onClick={() => setSkipAnimation(true)} disabled={skipAnimation || hiddenPause} aria-label="略過目前動畫">{skipAnimation ? '結算中…' : '略過動畫 ›'}</button>}{isDebug && !busy && <span className="seed-note">SEED {seedLabel.toUpperCase()}</span>}{isDebug && <button className="debug-toggle" onClick={() => setShowDebug((v) => !v)}>DEBUG</button>}</div></footer>
 
       {isDebug && showDebug && <section className="debug-panel"><div className="debug-panel__head"><b>DEBUG PANEL</b><span>SEED {seedLabel}</span><button onClick={() => setShowDebug(false)}>收起 ×</button></div><div className="debug-seed"><input value={debugSeed} onChange={(e) => setDebugSeed(e.target.value)} aria-label="輸入 RNG Seed"/><button onClick={() => startStage(displayedStageIndexRef.current, debugSeed)}>套用 Seed</button><button onClick={() => pushLog(`RNG seed ${seedLabel}`)}>顯示 Seed</button></div><div className="debug-actions"><button onClick={debugWin}>Win Stage</button><button onClick={() => debugNudge('enemy')}>Boss HP −50</button><button onClick={() => debugNudge('player')}>Player HP −20</button><button onClick={() => startStage(displayedStageIndexRef.current, seedLabel)}>Reset Stage</button><button onClick={() => { setProgress(unlockAll()); }}>Unlock All Stages</button><button onClick={debugCascade}>Force Cascade Board</button>{CHARACTER_IDS.map((id) => <button key={id} onClick={() => debugResolution(CHARACTERS[id].color)}>Force {id} Match</button>)}</div><div className="debug-log"><b>Last Turn Stats · {totalPower(battle.turnStats)} TOTAL</b>{STAT_KEYS.map((s) => <span key={s}>{s} {battle.turnStats[s]}</span>)}<details><summary>Event Log（最近 24 則）</summary>{eventLog.slice(-24).map((entry,i)=><p key={`${i}-${entry}`}>{entry}</p>)}</details></div></section>}
 
-      {(paused || hiddenPause) && <div className="pause-overlay"><div ref={pauseDialogRef} className="pause-card" role="dialog" aria-modal="true" aria-labelledby="pause-heading" tabIndex={-1} onKeyDown={(event) => {
-        if (event.key === 'Escape') { event.preventDefault(); setPaused(false); setHiddenPause(false); pauseButtonRef.current?.focus(); return; }
-        if (event.key !== 'Tab') return;
-        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-        const first = controls[0]; const last = controls[controls.length - 1];
-        if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-      }}><div className="pause-icon">Ⅱ</div><h2 id="pause-heading">{hiddenPause ? '先休息一下。' : '暫停中'}</h2><p>調整好節奏，再繼續冒險。</p><div className="pause-settings"><button type="button" aria-pressed={settings.fast} onClick={() => updateSettings({ fast: !settings.fast })}><span>快速模式</span><b>{settings.fast ? '開啟' : '關閉'}</b></button><button type="button" aria-pressed={settings.sound} onClick={() => updateSettings({ sound: !settings.sound })}><span>音效</span><b>{settings.sound ? '開啟' : '關閉'}</b></button></div><button className="primary-button" onClick={() => { setPaused(false); setHiddenPause(false); }}>繼續冒險 <span>→</span></button><button className="pause-exit" onClick={leaveBattle}>返回關卡</button></div></div>}
     </main>}
 
     {screen === 'result' && battle && <main className={`result-screen result-screen--${battle.status}`}>

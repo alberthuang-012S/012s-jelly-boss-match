@@ -323,6 +323,25 @@ describe('aggregation and damage', () => {
 });
 
 describe('seeded RNG and battle turn flow', () => {
+  it('applies one-layer stone locks that one adjacent match can clear', () => {
+    const random = new SeededRandom(42);
+    const battle = createBattle(STAGES.find((stage) => stage.enemyId === 'joint')!, random);
+    battle.enemyHp = 10000;
+    const first = forceMatchTurn(battle, 'green', random);
+    const stoneEffect = first.events.find((event) => event.type === 'BOARD_EFFECT' && event.message === '石化格 +1');
+    expect(stoneEffect?.type).toBe('BOARD_EFFECT');
+    if (stoneEffect?.type !== 'BOARD_EFFECT') throw new Error('Missing stone effect');
+    expect(stoneEffect.board.flat().filter((tile) => tile?.lockHits).map((tile) => tile!.lockHits)).toEqual([1]);
+
+    first.battle.board = stableBoard();
+    const locked = first.battle.board[1]![0]!;
+    locked.lockHits = 1;
+    const second = forceMatchTurn(first.battle, 'green', random);
+    const firstPop = second.events.find((event) => event.type === 'JELLY_POP');
+    expect(firstPop?.type).toBe('JELLY_POP');
+    if (firstPop?.type !== 'JELLY_POP') throw new Error('Missing adjacent match');
+    expect(firstPop.board.flat().find((tile) => tile?.id === locked.id)?.lockHits).toBeUndefined();
+  });
   it('repeats the exact same board and turn result from the same seed and move', () => {
     const run = () => {
       const rng = new SeededRandom('c0ffee12');
